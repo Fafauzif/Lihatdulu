@@ -450,6 +450,7 @@ function setPageMetadata(path) {
     "/tentang": "Panduan kondisi & ukuran",
     "/cari-dari-foto": "Demo pencarian dari foto",
     "/jual": "Ruang penjual Sora",
+    "/jual/pindai": "Pindai furnitur",
     "/jual/sora/rekam": "Video bukti Sora",
     "/jual/sora/tinjau": "Tinjau bukti Sora",
   };
@@ -475,6 +476,7 @@ function render() {
   const path = location.pathname.replace(/\/$/, "") || "/";
   document.body.classList.toggle("on-marketplace", path === "/beli");
   document.body.classList.toggle("capture-page", path === "/jual/sora/rekam");
+  document.body.classList.toggle("scan-capture-page", path === "/jual/pindai");
   document.body.classList.toggle("on-product", path.startsWith("/barang/"));
   document.body.classList.toggle(
     "has-compare-tray",
@@ -495,7 +497,28 @@ function render() {
   else if (path === "/tentang") app.innerHTML = about();
   else if (path.startsWith("/toko/"))
     app.innerHTML = storePage(path.split("/")[2]);
-  else if (["/jual", "/buat", "/barang-saya"].includes(path))
+  else if (path === "/jual/pindai") {
+    app.innerHTML = `<main id="main" tabindex="-1"><p class="scan-loading" role="status">Menyiapkan kamera…</p></main>`;
+    let cancelled = false;
+    let cleanup = () => {};
+    import("./scan-capture.js")
+      .then((module) => {
+        if (cancelled) return;
+        app.innerHTML = `<main id="main" tabindex="-1">${module.renderScanCapture()}</main>`;
+        cleanup = module.mountScanCapture(app, {
+          onNavigate: navigate,
+          onToast: toast,
+        });
+      })
+      .catch(() => {
+        if (!cancelled)
+          app.innerHTML = `<main id="main" tabindex="-1"><p class="scan-loading" role="alert">Kamera belum bisa dimuat. <a href="/jual" data-nav>Kembali ke ruang penjual</a></p></main>`;
+      });
+    dispose = () => {
+      cancelled = true;
+      cleanup();
+    };
+  } else if (["/jual", "/buat", "/barang-saya"].includes(path))
     app.innerHTML = shell(renderVideoWorkspace(sora), "seller-page");
   else if (path === "/jual/sora/rekam")
     app.innerHTML = `<main id="main" tabindex="-1">${renderVideoCapture(sora)}</main>`;
