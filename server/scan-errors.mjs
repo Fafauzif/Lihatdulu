@@ -6,6 +6,8 @@ export const ERROR_STATUS = Object.freeze({
   bad_metadata: 400,
   unsupported_media: 415,
   too_large: 413,
+  length_required: 411,
+  upload_incomplete: 400,
   not_found: 404,
   not_ready: 409,
   queue_full: 429,

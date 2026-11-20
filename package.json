@@ -12,7 +12,10 @@
     "test:production": "node scripts/verify-v6-production.mjs",
     "generate:products": "node scripts/render-core-assets.mjs",
     "test:browser": "node scripts/verify-v8.mjs",
-    "test:legacy": "node scripts/verify-stitch.mjs"
+    "test:legacy": "node scripts/verify-stitch.mjs",
+    "scan:api": "node server/scan-server.mjs --api-only",
+    "scan:serve": "node server/scan-server.mjs",
+    "scan:fake": "node server/scan-server.mjs --fake"
   },
   "keywords": [],
   "author": "",
