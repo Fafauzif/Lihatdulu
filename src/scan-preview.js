@@ -87,6 +87,7 @@ export function mountScanPreview(root, { id, onNavigate, onToast } = {}) {
   let timer = 0;
   let attempt = 0;
   let controller = null;
+  let viewerCleanup = null;
   let last = null;
 
   function schedule() {
@@ -154,12 +155,34 @@ export function mountScanPreview(root, { id, onNavigate, onToast } = {}) {
   }
 
   function mountViewer(dto) {
-    if (!dto.artifact?.url) return;
+    if (viewerCleanup || !dto.artifact?.url) return;
     if (poster && dto.artifact.stills?.[0]) {
       poster.src = dto.artifact.stills[0];
       poster.hidden = false;
     }
-    if (placeholder) placeholder.textContent = "Menyiapkan pratinjau 3D…";
+    void import("./scan-viewer.js")
+      .then((module) => {
+        if (disposed) return;
+        viewerCleanup = module.mountScanViewer(viewerHost, {
+          url: dto.artifact.url,
+          poster: dto.artifact.stills?.[0],
+          onStatus: (message, tone = "") => {
+            if (!placeholder) return;
+            if (message) {
+              placeholder.textContent = message;
+              placeholder.hidden = false;
+            }
+            placeholder.dataset.tone = tone;
+          },
+        });
+      })
+      .catch(() => {
+        if (disposed || !placeholder) return;
+        placeholder.textContent =
+          "Pratinjau 3D belum bisa dibuka di perangkat ini. Bingkai rekaman tetap tersedia.";
+        placeholder.dataset.tone = "error";
+        placeholder.hidden = false;
+      });
   }
 
   function paint(dto) {
@@ -249,6 +272,7 @@ export function mountScanPreview(root, { id, onNavigate, onToast } = {}) {
     disposed = true;
     clearTimeout(timer);
     controller?.abort();
+    viewerCleanup?.();
     document.removeEventListener("visibilitychange", onVisibility);
     host.replaceChildren();
   };

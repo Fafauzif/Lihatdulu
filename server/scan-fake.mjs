@@ -18,15 +18,18 @@ function fixturePly() {
     "opacity", "scale_0", "scale_1", "scale_2",
     "rot_0", "rot_1", "rot_2", "rot_3",
   ];
+  const count = 4096;
   const header = [
     "ply",
-    "format ascii 1.0",
-    `element vertex 4096`,
+    "format binary_little_endian 1.0",
+    `element vertex ${count}`,
     ...properties.map((name) => `property float ${name}`),
     "end_header",
+    "",
   ].join("\n");
-  const rows = [];
-  for (let index = 0; index < 4096; index++) {
+  const body = Buffer.alloc(count * properties.length * 4);
+  let offset = 0;
+  for (let index = 0; index < count; index++) {
     const x = ((index % 16) - 7.5) * 0.035;
     const y = ((Math.floor(index / 16) % 16) - 7.5) * 0.035;
     const z = (Math.floor(index / 256) - 7.5) * 0.035;
@@ -37,9 +40,12 @@ function fixturePly() {
       5, -3.9, -3.9, -3.9,
       1, 0, 0, 0,
     ];
-    rows.push(values.join(" "));
+    for (const value of values) {
+      body.writeFloatLE(value, offset);
+      offset += 4;
+    }
   }
-  return `${header}\n${rows.join("\n")}\n`;
+  return Buffer.concat([Buffer.from(header, "utf8"), body]);
 }
 
 const STILL_SOURCES = [
