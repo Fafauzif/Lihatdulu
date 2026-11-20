@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createReadStream, createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { mkdir, rm, stat } from "node:fs/promises";
 import { once } from "node:events";
 import { dirname, extname, join, resolve, sep } from "node:path";
@@ -8,6 +8,7 @@ import {
   createJob,
   jobPaths,
   listJobs,
+  pruneJobs,
   readJob,
   TERMINAL_STAGES,
   updateJob,
@@ -128,12 +129,29 @@ async function sendFile(res, file, contentType = "application/octet-stream") {
 
 export async function createScanServer(options = {}) {
   const root = resolve(options.root ?? join(repoRoot, "var/scans"));
-  const distDir = resolve(options.distDir ?? join(repoRoot, "dist"));
+  const distDir = resolve(
+    options.distDir ?? process.env.SCAN_DIST ?? join(repoRoot, "dist"),
+  );
   const pipeline = options.pipeline ?? (await selectPipeline());
   const host = options.host ?? "127.0.0.1";
   const port = Number(options.port ?? 0);
   const staticEnabled = options.staticEnabled !== false;
+  const keep = Number(options.keep ?? process.env.SCAN_KEEP ?? SCAN_KEEP);
   const state = { active: null, queue: [] };
+  const lifecycle = new AbortController();
+
+  await mkdir(root, { recursive: true });
+  for (const record of await listJobs(root)) {
+    if (TERMINAL_STAGES.includes(record.stage)) continue;
+    await updateJob(root, record.id, {
+      stage: "failed",
+      error: {
+        code: "server_stopped",
+        message: "Server demo berhenti sebelum pemrosesan selesai.",
+      },
+    }).catch(() => {});
+  }
+  await pruneJobs(root, keep).catch(() => {});
 
   function enqueue(id) {
     if (state.queue.length >= MAX_QUEUE) return false;
@@ -152,6 +170,7 @@ export async function createScanServer(options = {}) {
       if (!record) throw notFound();
       const result = await pipeline(record, {
         root,
+        signal: lifecycle.signal,
         updateStage: async (stage, patch = {}) => {
           await updateJob(root, next, { stage, ...patch });
         },
@@ -178,6 +197,7 @@ export async function createScanServer(options = {}) {
       if (!(error instanceof ScanError)) console.error(error);
     } finally {
       state.active = null;
+      await pruneJobs(root, keep).catch(() => {});
       void pump();
     }
   }
@@ -394,7 +414,22 @@ export async function createScanServer(options = {}) {
     });
   }
 
-  return { server, url, close };
+  async function stop() {
+    lifecycle.abort();
+    const activeId = state.active;
+    state.queue.length = 0;
+    if (activeId)
+      await updateJob(root, activeId, {
+        stage: "failed",
+        error: {
+          code: "server_stopped",
+          message: "Server demo berhenti sebelum pemrosesan selesai.",
+        },
+      }).catch(() => {});
+    await close();
+  }
+
+  return { server, url, close, stop };
 }
 
 async function main() {
@@ -408,17 +443,25 @@ async function main() {
   const port = Number(value("--port", process.env.SCAN_PORT ?? 8787));
   const host = value("--host", process.env.SCAN_HOST ?? "127.0.0.1");
   const root = resolve(process.env.SCAN_ROOT ?? join(repoRoot, "var/scans"));
+  const distDir = resolve(process.env.SCAN_DIST ?? join(repoRoot, "dist"));
+  const apiOnly = flag("--api-only");
+  if (!apiOnly && !existsSync(join(distDir, "index.html"))) {
+    console.error("Situs belum dibangun. Jalankan npm run build dulu.");
+    process.exit(1);
+  }
   await mkdir(root, { recursive: true });
-  const { url, close } = await createScanServer({
+  const { url, stop } = await createScanServer({
     root,
+    distDir,
     port,
     host,
-    staticEnabled: !flag("--api-only"),
+    staticEnabled: !apiOnly,
+    keep: Number(process.env.SCAN_KEEP ?? SCAN_KEEP),
   });
   console.log(`Scan API on ${url}`);
   for (const signal of ["SIGINT", "SIGTERM"])
     process.on(signal, async () => {
-      await close();
+      await stop();
       process.exit(0);
     });
 }

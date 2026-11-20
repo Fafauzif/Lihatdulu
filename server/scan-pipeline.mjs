@@ -287,10 +287,13 @@ export async function runRealPipeline(
     updateStage,
     runTool = defaultRunTool,
     diskFree = defaultDiskFree,
+    signal,
     limits = {},
   } = {},
 ) {
   const rules = { ...DEFAULT_LIMITS, ...limits };
+  const tool = (name, args, options = {}) =>
+    runTool(name, args, { ...options, signal });
   const paths = jobPaths(root, record.id);
   const timings = { extractMs: 0, alignMs: 0, trainMs: 0, convertMs: 0, totalMs: 0 };
   const free = await diskFree(root);
@@ -302,7 +305,7 @@ export async function runRealPipeline(
 
   await updateStage("validating");
   const clip = await findClip(paths);
-  const probe = await runTool(
+  const probe = await tool(
     "ffprobe",
     buildFfprobeArgs({ clip }),
     { timeoutMs: TIMEOUTS.ffprobe, logPath: join(paths.logs, "ffprobe.log") },
@@ -322,7 +325,7 @@ export async function runRealPipeline(
 
   await updateStage("extracting");
   await mkdir(paths.frames, { recursive: true });
-  const extract = await runTool(
+  const extract = await tool(
     "ffmpeg",
     buildExtractArgs({ clip, framesDir: paths.frames }),
     { timeoutMs: TIMEOUTS.ffmpeg, logPath: join(paths.logs, "ffmpeg.log") },
@@ -342,21 +345,21 @@ export async function runRealPipeline(
   const database = join(paths.work, "db.db");
   const sparse = join(paths.work, "sparse");
   const alignStarted = Date.now();
-  const feature = await runTool(
+  const feature = await tool(
     "colmap",
     buildFeatureArgs({ database, images: paths.frames }),
     { timeoutMs: TIMEOUTS.feature, logPath: join(paths.logs, "colmap-feature.log") },
   );
-  const match = await runTool("colmap", buildMatchArgs({ database }), {
+  const match = await tool("colmap", buildMatchArgs({ database }), {
     timeoutMs: TIMEOUTS.match,
     logPath: join(paths.logs, "colmap-match.log"),
   });
-  const map = await runTool(
+  const map = await tool(
     "colmap",
     buildMapperArgs({ database, images: paths.frames, sparse }),
     { timeoutMs: TIMEOUTS.mapper, logPath: join(paths.logs, "colmap-map.log") },
   );
-  const analyze = await runTool(
+  const analyze = await tool(
     "colmap",
     buildAnalyzeArgs({ model: join(sparse, "0") }),
     { timeoutMs: TIMEOUTS.ffprobe, logPath: join(paths.logs, "colmap-analyze.log") },
@@ -381,7 +384,7 @@ export async function runRealPipeline(
   await updateStage("reconstructing");
   await mkdir(paths.output, { recursive: true });
   const outputPly = join(paths.work, "scan.ply");
-  const brush = await runTool(
+  const brush = await tool(
     "brush",
     buildBrushArgs({ datasetDir: dataset, outputPly }),
     {
@@ -396,7 +399,7 @@ export async function runRealPipeline(
   await updateStage("finalizing");
   const spz = join(paths.output, "scan.spz");
   const convertStarted = Date.now();
-  let conversion = await runTool(
+  let conversion = await tool(
     "splatTransform",
     buildConvertArgs({ inputPly: ply, outputSpz: spz, info: true }),
     { timeoutMs: TIMEOUTS.convert, logPath: join(paths.logs, "convert.log") },
@@ -405,12 +408,12 @@ export async function runRealPipeline(
   let bytes = (await stat(spz)).size;
   if (bytes > rules.maxArtifactBytes || splatCount > rules.maxSplats) {
     const small = join(paths.work, "scan-small.ply");
-    await runTool(
+    await tool(
       "splatTransform",
       buildDecimateArgs({ inputPly: ply, outputPly: small }),
       { timeoutMs: TIMEOUTS.convert, logPath: join(paths.logs, "decimate.log") },
     );
-    conversion = await runTool(
+    conversion = await tool(
       "splatTransform",
       buildConvertArgs({ inputPly: small, outputSpz: spz, info: true }),
       { timeoutMs: TIMEOUTS.convert, logPath: join(paths.logs, "convert.log") },
@@ -457,3 +460,4 @@ export async function runRealPipeline(
   await rm(paths.work, { recursive: true, force: true });
   return { media, provenance, artifact };
 }
+
