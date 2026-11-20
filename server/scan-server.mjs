@@ -75,6 +75,7 @@ async function selectPipeline() {
 }
 
 function sendJson(res, status, payload) {
+  if (res.writableEnded || res.headersSent) return;
   const body = JSON.stringify(payload);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
@@ -82,6 +83,24 @@ function sendJson(res, status, payload) {
     "cache-control": "no-store",
   });
   res.end(body);
+}
+
+// An idempotent hit answers before the retried clip is consumed. Drain (or
+// wait for the abort) so the response is not written while the body streams.
+function drainRequest(req, timeoutMs = 10_000) {
+  if (req.readableEnded || req.complete) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    timer.unref?.();
+    req.once("end", done);
+    req.once("aborted", done);
+    req.once("error", done);
+    req.resume();
+  });
 }
 
 function fail(res, error) {
@@ -230,7 +249,7 @@ export async function createScanServer(options = {}) {
           Date.now() - Date.parse(record.createdAt) < 3_600_000,
       );
       if (existing) {
-        req.resume();
+        await drainRequest(req);
         sendJson(res, 200, { id: existing.id });
         return;
       }

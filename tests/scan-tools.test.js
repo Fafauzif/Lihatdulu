@@ -53,7 +53,7 @@ test("runTool appends output and maps a timeout", async () => {
       runTool(
         "ffmpeg",
         ["-e", "process.stdout.write('halo'); setTimeout(() => {}, 5000)"],
-        { timeoutMs: 120, logPath },
+        { timeoutMs: 800, logPath },
       ),
     (error) => error.code === "tool_timeout",
   );

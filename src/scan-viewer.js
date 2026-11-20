@@ -174,8 +174,5 @@ export function mountScanViewer(root, { url, poster, onStatus = () => {} } = {})
     } catch {}
     canvas.remove();
     hint.remove();
-    if (poster) {
-      // The poster stays in the host for the next mount.
-    }
   };
 }

@@ -105,3 +105,17 @@ test("pruneJobs keeps 10 newest terminal jobs and never removes a live job", asy
   );
   assert.ok(await readJob(root, live.id));
 });
+
+test("concurrent updates never drop or corrupt the record", async () => {
+  const stages = ["validating", "extracting", "aligning", "reconstructing"];
+  const results = await Promise.allSettled(
+    stages.map((stage) => updateJob(root, job.id, { stage })),
+  );
+  assert.deepEqual(
+    results.filter((result) => result.status === "rejected"),
+    [],
+  );
+  const stored = await readJob(root, job.id);
+  assert.ok(stored, "record must still be readable");
+  assert.equal(stages.includes(stored.stage), true);
+});

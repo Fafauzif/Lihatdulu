@@ -87,26 +87,23 @@ export async function runTool(
       windowsHide: true,
       shell: false,
     });
-    const finish = (error) => {
+    const finish = async (error) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
-      const done = () =>
-        error
-          ? reject(error)
-          : resolve({ ms: Date.now() - started, stdout: output.join("") });
       if (logPath)
-        writeFile(logPath, output.join(""), "utf8").then(done, done);
-      else done();
+        await writeFile(logPath, output.join(""), "utf8").catch(() => {});
+      if (error) reject(error);
+      else resolve({ ms: Date.now() - started, stdout: output.join("") });
     };
     const onAbort = () => {
       child.kill();
-      finish(new ScanError("server_stopped", "Pemrosesan dihentikan."));
+      void finish(new ScanError("server_stopped", "Pemrosesan dihentikan."));
     };
     timer = setTimeout(() => {
       child.kill();
-      finish(
+      void finish(
         new ScanError(
           "tool_timeout",
           `Alat ${name} melebihi batas waktu ${Math.round(timeoutMs / 1000)} detik.`,
@@ -118,7 +115,7 @@ export async function runTool(
     child.stderr?.on("data", text);
     child.once("error", (error) => {
       const missing = error?.code === "ENOENT";
-      finish(
+      void finish(
         new ScanError(
           missing ? "tool_missing" : "tool_failed",
           missing
@@ -130,10 +127,10 @@ export async function runTool(
     child.once("close", (code) => {
       if (settled) return;
       if (code === 0) {
-        finish();
+        void finish();
         return;
       }
-      finish(
+      void finish(
         new ScanError(
           "tool_failed",
           `Alat ${name} gagal (kode ${code}). ${tail.slice(-4).join(" ")}`.trim(),

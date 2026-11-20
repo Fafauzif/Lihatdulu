@@ -168,7 +168,7 @@ export function parseFfprobe(text) {
 export function parseRegisteredImages(text) {
   for (const pattern of [
     /Registered images:\s*(\d+)/i,
-    /^\s*Images:\s*(\d+)/im,
+    /Registered frames:\s*(\d+)/i,
   ]) {
     const match = pattern.exec(text);
     if (match) return Number(match[1]);

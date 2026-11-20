@@ -10,6 +10,10 @@
 | Design system | Shared colour, type, spacing, radius and focus decisions live in `src/brand-tokens.css` and `src/stitch.css`; page-level eyebrow kickers are removed, informational labels stay. Desktop catalogue rail shows at ≥900 px with a sticky internal filter list. | A human review finds the rail cramped between 900 and 1,050 px, or the kicker rule conflicts with a future information need. |
 | Scope | Keep Vite/JavaScript/Three.js and existing marketplace behaviors. Improve in tested slices. | The owner approves a different stack or changes a core product contract. |
 | Capture guidance | Use clear filming instructions first. Show coverage only where real processing supplies evidence. | A measured coverage method proves helpful during recording. |
+| Real scan runtime | One Node process serves the built site, SPA routes and `/api/scans`; one disk-backed worker runs FFmpeg → COLMAP → Brush → SPZ. Opaque UUID job IDs are the capability; no job list, no accounts. | A second worker or persistent ownership is needed for judging. |
+| Real scan limits | 100 MB upload, 8–45 s clip (server accepts 7–50 s), 60 frames minimum, 60 MB / 2.5 M splat artifact cap, 10 finished jobs retained. | Real footage shows the limits are wrong for the chair. |
+| Real scan truth | The preview is a separate `/pindai/:id` route with clip provenance, measured dimensions and frames extracted from the same clip. Scans do not become catalogue listings. | The owner wants scans listed in the catalogue. |
+| Scan toolchain | Pin COLMAP 4.2.1 and Brush 0.3.0 locally under `var/tools` and resolve them with `SCAN_COLMAP` / `SCAN_BRUSH`; do not change the system PATH. | The demo laptop is reimaged or a second laptop is used. |
 
 ## Still open
 

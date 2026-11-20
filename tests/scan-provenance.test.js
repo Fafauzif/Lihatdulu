@@ -118,6 +118,10 @@ test("parseRegisteredImages and parseSplatCount read recorded output", () => {
   assert.equal(parseRegisteredImages(analyzerLine), 78);
   assert.equal(parseSplatCount('{"numGaussians": 4096}'), 4096);
   assert.throws(() => parseSplatCount("{}"), /jumlah splat/);
+  assert.throws(
+    () => parseRegisteredImages("Images: 90\nPoints: 5000"),
+    (error) => error.code === "alignment_failed",
+  );
 });
 
 test("findBrushOutput finds the exported ply", async () => {

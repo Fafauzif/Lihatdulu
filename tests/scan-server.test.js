@@ -11,6 +11,7 @@ import {
   createScanServer,
 } from "../server/scan-server.mjs";
 import { runFakePipeline } from "../server/scan-fake.mjs";
+import { listJobs } from "../server/scan-jobs.mjs";
 
 const clip = Buffer.from("fake-webm-body");
 let root;
@@ -233,6 +234,38 @@ test("duplicate clientId returns the same job without creating a second one", as
   assert.equal(first.status, 201);
   assert.equal(second.status, 200);
   assert.equal(second.json.id, first.json.id);
+});
+
+test("an aborted upload leaves the job failed with a useful code", async () => {
+  const before = new Set((await listJobs(root)).map((job) => job.id));
+  const req = httpRequest(
+    `${url}/api/scans?title=Kursi&d=63&w=58&h=84`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "video/webm",
+        "content-length": "1000",
+      },
+    },
+  );
+  req.on("error", () => {});
+  req.write(Buffer.alloc(50));
+  await delay(60);
+  req.destroy();
+  let aborted = null;
+  for (let index = 0; index < 120; index++) {
+    const jobs = await listJobs(root);
+    aborted = jobs.find((job) => !before.has(job.id));
+    if (aborted?.stage === "failed") break;
+    await delay(25);
+  }
+  assert.equal(aborted?.stage, "failed");
+  assert.equal(
+    ["upload_incomplete", "internal", "server_stopped"].includes(
+      aborted.error.code,
+    ),
+    true,
+  );
 });
 
 test("queue full is rejected with 429", async () => {

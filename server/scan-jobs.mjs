@@ -211,21 +211,50 @@ export async function createJob(root, meta) {
   return record;
 }
 
-export async function writeJob(root, record) {
+// One in-process lock per job: read-modify-write cycles from the queue, the
+// pipeline and shutdown must not interleave. Writes use a unique temp file so
+// two writers can never rename the same path.
+const writeChains = new Map();
+
+function withLock(id, task) {
+  const previous = writeChains.get(id) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(task);
+  writeChains.set(id, next);
+  return next.finally(() => {
+    if (writeChains.get(id) === next) writeChains.delete(id);
+  });
+}
+
+async function persistJob(root, record) {
   validateJob(record);
   const paths = jobPaths(root, record.id);
   await mkdir(paths.dir, { recursive: true });
-  const temporary = `${paths.job}.tmp`;
+  const temporary = `${paths.job}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   try {
-    await rename(temporary, paths.job);
-  } catch (error) {
-    // Windows can refuse to replace a file opened by a concurrent reader.
-    if (!["EPERM", "EACCES", "EEXIST"].includes(error?.code)) throw error;
-    await rm(paths.job, { force: true });
-    await rename(temporary, paths.job);
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await rename(temporary, paths.job);
+        return record;
+      } catch (error) {
+        // Windows can briefly refuse to replace a file opened by a reader.
+        // Retry instead of unlinking: a missing record would strand the job.
+        if (
+          !["EPERM", "EACCES", "EBUSY"].includes(error?.code) ||
+          attempt >= 3
+        )
+          throw error;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+  } finally {
+    await rm(temporary, { force: true }).catch(() => {});
   }
-  return record;
+}
+
+export async function writeJob(root, record) {
+  validateJob(record);
+  return withLock(record.id, () => persistJob(root, record));
 }
 
 export async function readJob(root, id) {
@@ -239,18 +268,20 @@ export async function readJob(root, id) {
 }
 
 export async function updateJob(root, id, patch = {}) {
-  const current = await readJob(root, id);
-  if (!current) throw new Error("Pekerjaan tidak ditemukan.");
-  if (patch.id && patch.id !== current.id)
-    throw new Error("ID pekerjaan tidak boleh diubah.");
-  if (TERMINAL_STAGES.includes(current.stage))
-    throw new Error("Pekerjaan sudah selesai.");
-  const next = {
-    ...current,
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  return writeJob(root, next);
+  return withLock(id, async () => {
+    const current = await readJob(root, id);
+    if (!current) throw new Error("Pekerjaan tidak ditemukan.");
+    if (patch.id && patch.id !== current.id)
+      throw new Error("ID pekerjaan tidak boleh diubah.");
+    if (TERMINAL_STAGES.includes(current.stage))
+      throw new Error("Pekerjaan sudah selesai.");
+    const next = {
+      ...current,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    return persistJob(root, next);
+  });
 }
 
 export async function listJobs(root) {
