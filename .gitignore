@@ -6,3 +6,4 @@ var/
 .playwright/
 playwright-report/
 test-results/
+.superpowers/
