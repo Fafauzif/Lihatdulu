@@ -42,6 +42,15 @@ Brush options that matter (from the recorded help):
 - `--export-every <n>` (default 5000) — set it equal to `--total-steps` for one final file
 - `[PATH_OR_URL]` is positional; the dataset root must contain `images/` and `sparse/0/`
 
+## Known-dataset smoke (not the real scan)
+
+- The prepared Sora walkthrough clip was run through the worker as a known asset. FFmpeg extraction worked (54 frames at 3 fps), COLMAP ran, and registration failed honestly with 2 of 54 frames — the clip is a cabinet close-up without enough parallax to reconstruct. This confirms the failure path, not a usable scan source.
+- COLMAP's real analyzer output on the public South Building model reads `Registered images: 128`; the worker's parser matches that line.
+- Brush 0.3.0 trained on the public South Building dataset (128 images) in about four minutes: 28.8 MB PLY, 122 158 Gaussians, 2.2 MB SPZ after `--filter-nan`. The SPZ loaded in the in-site SparkJS viewer with no page errors.
+- The South Building is a flat facade, so the default fit sees it edge-on. That is a dataset-specific framing observation; a volumetric furniture scan should not share it.
+
+These prove tool installation and wiring. They do **not** prove the required real chair scan.
+
 ## Still pending (needs a real chair clip)
 
 - One 30–45 s rear-camera clip of the same chair, filmed slowly at two heights.
