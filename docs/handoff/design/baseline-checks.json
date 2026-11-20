@@ -1,0 +1,86 @@
+{
+  "baseline": true,
+  "results": [
+    {
+      "width": 1440,
+      "height": 900,
+      "rail": true,
+      "firstCardY": 342,
+      "applyY": 2135,
+      "scrollWidth": 1430,
+      "background": "rgb(246, 251, 241)",
+      "verifiedPriceFilter": true
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "rail": false,
+      "firstCardY": 342,
+      "applyY": 688,
+      "scrollWidth": 1014,
+      "background": "rgb(246, 251, 241)",
+      "verifiedPriceFilter": true
+    },
+    {
+      "width": 900,
+      "height": 768,
+      "rail": false,
+      "firstCardY": 342,
+      "applyY": 688,
+      "scrollWidth": 890,
+      "background": "rgb(246, 251, 241)",
+      "verifiedPriceFilter": true
+    },
+    {
+      "width": 899,
+      "height": 768,
+      "rail": false,
+      "firstCardY": 342,
+      "applyY": 688,
+      "scrollWidth": 889,
+      "background": "rgb(246, 251, 241)",
+      "verifiedPriceFilter": true
+    },
+    {
+      "width": 768,
+      "height": 768,
+      "rail": false,
+      "firstCardY": 342,
+      "applyY": 688,
+      "scrollWidth": 758,
+      "background": "rgb(246, 251, 241)",
+      "verifiedPriceFilter": true
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "rail": false,
+      "firstCardY": 332,
+      "applyY": 868,
+      "scrollWidth": 420,
+      "background": "rgb(246, 251, 241)",
+      "verifiedPriceFilter": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "rail": false,
+      "firstCardY": 353,
+      "applyY": 780,
+      "scrollWidth": 380,
+      "background": "rgb(246, 251, 241)",
+      "verifiedPriceFilter": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "rail": false,
+      "firstCardY": 388,
+      "applyY": 483,
+      "scrollWidth": 310,
+      "background": "rgb(246, 251, 241)",
+      "verifiedPriceFilter": true
+    }
+  ],
+  "pageErrors": []
+}

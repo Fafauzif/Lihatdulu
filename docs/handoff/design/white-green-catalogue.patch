@@ -1,0 +1,199 @@
+diff --git a/src/discovery-views.js b/src/discovery-views.js
+index 549abb6..cb347d1 100644
+--- a/src/discovery-views.js
++++ b/src/discovery-views.js
+@@ -93,7 +93,7 @@ export function createDiscoveryViews({
+     const facets = getFacets(catalogue()),
+       prefix = mobile ? "sheet" : "rail",
+       count = filterCatalogue(catalogue(), f).length;
+-    return `<form data-filters novalidate class="filter-form discovery-filter-form" data-filter-mode="${mobile ? "sheet" : "rail"}"><input type="hidden" name="q" value="${esc(f.q)}"><input type="hidden" name="sort" value="${esc(f.sort)}"><div class="filter-heading"><h2>${icon("filter")} Sesuaikan pilihan</h2>${button("Reset", "filter-reset", "text-button", 'aria-label="Reset penyaring, pertahankan pencarian dan urutan"')}</div><p class="filter-draft-help">Perubahan diterapkan setelah memilih Tampilkan barang.</p><div class="filter-fields">${filterGroup("categories", f, facets)}<fieldset><legend>Rentang harga</legend><p class="field-hint" id="${prefix}-price-help">Rupiah bulat. Kolom kosong berarti tanpa batas.</p><div class="filter-numbers">${[
++    return `<form data-filters novalidate class="filter-form discovery-filter-form" data-filter-mode="${mobile ? "sheet" : "rail"}"><input type="hidden" name="q" value="${esc(f.q)}"><input type="hidden" name="sort" value="${esc(f.sort)}"><div class="filter-heading"><h2>${icon("filter")} Filter</h2>${button("Reset", "filter-reset", "text-button", 'aria-label="Reset penyaring, pertahankan pencarian dan urutan"')}</div><p class="filter-draft-help">Perubahan diterapkan setelah memilih Tampilkan barang.</p><div class="filter-fields"><fieldset><legend>Harga (Rp)</legend><p class="field-hint" id="${prefix}-price-help">Rupiah bulat. Kolom kosong berarti tanpa batas.</p><div class="filter-numbers">${[
+       ["min", "Harga minimal"],
+       ["max", "Harga maksimal"],
+     ]
+@@ -103,7 +103,7 @@ export function createDiscoveryViews({
+       )
+       .join(
+         "",
+-      )}</div><p class="field-hint price-range-help" data-price-summary>${priceSummary(f)}</p></fieldset><fieldset><legend>Dimensi maksimal</legend><p class="field-hint">Dalam cm; kolom kosong berarti tanpa batas.</p><div class="dimension-fields">${DIMENSIONS.map(([key, label]) => `<label for="${prefix}-${key}">${label}<span><input id="${prefix}-${key}" name="${key}" type="text" inputmode="decimal" autocomplete="off" placeholder="Tanpa batas" value="${f[key] ?? ""}" aria-describedby="${prefix}-${key}-error"><small>cm</small></span><small class="filter-field-error" id="${prefix}-${key}-error" data-error-for="${key}" hidden></small></label>`).join("")}</div></fieldset><fieldset><legend>Media inspeksi</legend><label class="check-row"><input type="checkbox" name="model" value="1" ${f.model ? "checked" : ""}><span>Model 3D tersedia</span></label></fieldset>${["conditions", "materials", "locations"].map((key) => filterGroup(key, f, facets)).join("")}</div><p class="filter-validation-status" data-filter-status role="status" aria-live="polite"></p><div class="filter-submit"><button class="button" type="submit"><span data-filter-action-label>Tampilkan <span data-filter-preview>${count}</span> barang</span>${icon("arrow")}</button>${button("Batal", "filter-cancel", "button secondary")}</div></form>`;
++      )}</div><p class="field-hint price-range-help" data-price-summary>${priceSummary(f)}</p></fieldset>${filterGroup("categories", f, facets)}${filterGroup("locations", f, facets)}<fieldset><legend>Dimensi maksimal</legend><p class="field-hint">Dalam cm; kolom kosong berarti tanpa batas.</p><div class="dimension-fields">${DIMENSIONS.map(([key, label]) => `<label for="${prefix}-${key}">${label}<span><input id="${prefix}-${key}" name="${key}" type="text" inputmode="decimal" autocomplete="off" placeholder="Tanpa batas" value="${f[key] ?? ""}" aria-describedby="${prefix}-${key}-error"><small>cm</small></span><small class="filter-field-error" id="${prefix}-${key}-error" data-error-for="${key}" hidden></small></label>`).join("")}</div></fieldset><fieldset><legend>Media inspeksi</legend><label class="check-row"><input type="checkbox" name="model" value="1" ${f.model ? "checked" : ""}><span>Model 3D tersedia</span></label></fieldset>${["conditions", "materials"].map((key) => filterGroup(key, f, facets)).join("")}</div><p class="filter-validation-status" data-filter-status role="status" aria-live="polite"></p><div class="filter-submit"><button class="button" type="submit"><span data-filter-action-label>Tampilkan <span data-filter-preview>${count}</span> barang</span>${icon("arrow")}</button>${button("Batal", "filter-cancel", "button secondary")}</div></form>`;
+   }
+ 
+   function validateForm(form, { focus = false } = {}) {
+diff --git a/src/main.js b/src/main.js
+index f418e43..8525a20 100644
+--- a/src/main.js
++++ b/src/main.js
+@@ -235,7 +235,7 @@ function marketplace() {
+   const groupCount = activeGroupCount(f);
+   const collections = parentCollections(catalogue()).slice(0, 3);
+   return shell(
+-    `<div class="market-heading"><div><span class="eyebrow">TEMUKAN TEMPAT BARUNYA</span><h1>Koleksi furnitur</h1></div>${link("/cari-dari-foto", icon("camera") + " Demo acuan foto", "text-link")}</div><nav class="category-chips" aria-label="Jelajahi kategori">${button("Semua", "category", "chip " + (!f.categories.length ? "selected" : ""), `data-category="" aria-pressed="${!f.categories.length}"`)}${collections.map((c) => button(`${c.label} <small>${c.count}</small>`, "parent-category", "chip " + (f.categories.length && f.categories.join(",") === c.categories.join(",") ? "selected" : ""), `data-category="${c.id}" aria-pressed="${f.categories.join(",") === c.categories.join(",")}"`)).join("")}${link("/beli?model=1", icon("cube") + " 3D tersedia", "chip")}${link("/beli?max=1500000", "Hingga Rp 1,5 juta", "chip")}</nav><div class="market-layout"><aside class="filter-rail" aria-label="Filter katalog">${filterForm(f)}</aside><section class="catalogue-results" id="catalogue-results" tabindex="-1" aria-label="Hasil katalog"><div class="result-toolbar"><strong data-result-count>${items.length} furnitur ditemukan</strong><div class="result-tools">${button(icon("filter") + ` Filter${groupCount ? " (" + groupCount + ")" : ""}`, "open-filters", "button secondary mobile-filter", `aria-label="Filter, ${groupCount} kelompok aktif"`)}<label class="sort-label"><span>Urutkan</span><select data-sort aria-label="Urutkan furnitur">${[
++    `<div class="market-heading"><h1>Furnitur bekas</h1>${link("/cari-dari-foto", icon("camera") + " Demo acuan foto", "text-link")}</div><nav class="category-chips" aria-label="Jelajahi kategori">${button("Semua", "category", "chip " + (!f.categories.length ? "selected" : ""), `data-category="" aria-pressed="${!f.categories.length}"`)}${collections.map((c) => button(`${c.label} <small>${c.count}</small>`, "parent-category", "chip " + (f.categories.length && f.categories.join(",") === c.categories.join(",") ? "selected" : ""), `data-category="${c.id}" aria-pressed="${f.categories.join(",") === c.categories.join(",")}"`)).join("")}${link("/beli?model=1", icon("cube") + " 3D tersedia", "chip quick-filter")}${link("/beli?max=1500000", "Hingga Rp 1,5 juta", "chip quick-filter")}</nav><div class="market-layout"><aside class="filter-rail" aria-label="Filter katalog">${filterForm(f)}</aside><section class="catalogue-results" id="catalogue-results" tabindex="-1" aria-label="Hasil katalog"><div class="result-toolbar"><strong data-result-count>${items.length} furnitur ditemukan</strong><div class="result-tools">${button(icon("filter") + ` Filter${groupCount ? " (" + groupCount + ")" : ""}`, "open-filters", "button secondary mobile-filter", `aria-label="Filter, ${groupCount} kelompok aktif"`)}<label class="sort-label"><span>Urutkan</span><select data-sort aria-label="Urutkan furnitur">${[
+       ["relevance", "Pilihan LihatDulu"],
+       ["newest", "Terbaru"],
+       ["price-asc", "Harga terendah"],
+@@ -440,7 +440,7 @@ function cartPage(review = false) {
+ function setPageMetadata(path) {
+   const titles = {
+     "/": "Furnitur bekas, lebih jelas sebelum dipilih",
+-    "/beli": "Koleksi furnitur",
++    "/beli": "Furnitur bekas",
+     "/tersimpan": "Pilihan, draf & ringkasan tersimpan",
+     "/bandingkan": "Bandingkan furnitur",
+     "/keranjang": "Keranjang furnitur",
+@@ -472,6 +472,7 @@ function render() {
+   dispose();
+   dispose = () => {};
+   const path = location.pathname.replace(/\/$/, "") || "/";
++  document.body.classList.toggle("on-marketplace", path === "/beli");
+   document.body.classList.toggle("capture-page", path === "/jual/sora/rekam");
+   document.body.classList.toggle("on-product", path.startsWith("/barang/"));
+   document.body.classList.toggle(
+diff --git a/src/stitch.css b/src/stitch.css
+index 46afe17..55d9547 100644
+--- a/src/stitch.css
++++ b/src/stitch.css
+@@ -4413,3 +4413,142 @@ dialog::backdrop {
+     max-width: 100%;
+   }
+ }
++
++/* Marketplace concept. Keep green on actions and selected controls. */
++.on-marketplace {
++  --canvas: #fff;
++  --paper: #fff;
++  --ink: #1b2420;
++  --muted: #515c56;
++  --line: #dfe5e0;
++  --soft: #eaf4ee;
++  --forest: #176044;
++  --forest-hover: #104832;
++  --media: #f5f6f4;
++  background: var(--canvas);
++}
++
++.market-page .market-heading {
++  margin-bottom: 12px;
++}
++
++.market-page .market-heading h1 {
++  font-size: clamp(26px, 3vw, 36px);
++  margin-top: 0;
++}
++
++.market-page .category-chips {
++  margin-bottom: 12px;
++  border-bottom: 1px solid var(--line);
++}
++
++.market-page .chip.selected {
++  background: var(--soft);
++  color: var(--forest-hover);
++  border-color: var(--forest);
++}
++
++.market-page .result-toolbar {
++  margin-bottom: 10px;
++}
++
++.market-page .mobile-filter {
++  background: var(--soft);
++  color: var(--forest-hover);
++  border-color: var(--forest);
++}
++
++.market-page .card-media {
++  aspect-ratio: 5 / 4;
++}
++
++.market-page .card-image {
++  padding: 6px;
++}
++
++.market-page .card-condition {
++  font-size: 12px;
++}
++
++@media (min-width: 900px) {
++  .market-page .market-layout {
++    grid-template-columns: 226px minmax(0, 1fr);
++    gap: clamp(16px, 2vw, 28px);
++  }
++
++  .market-page .filter-rail {
++    display: block;
++    position: sticky;
++    top: 100px;
++    padding: 14px 12px 12px;
++  }
++
++  .market-page .filter-rail .filter-heading {
++    align-items: center;
++    margin-bottom: 10px;
++  }
++
++  .market-page .filter-rail .filter-draft-help {
++    margin: 0 0 10px;
++  }
++
++  .market-page .filter-rail .filter-fields {
++    max-height: min(440px, max(140px, calc(100dvh - 440px)));
++    overflow: auto;
++    scrollbar-gutter: stable;
++    padding: 4px 8px 4px 3px;
++  }
++
++  .market-page .filter-rail fieldset {
++    margin-bottom: 12px;
++    padding-bottom: 12px;
++    border-bottom: 1px solid var(--line);
++  }
++
++  .market-page .filter-rail .filter-submit {
++    grid-template-columns: minmax(0, 1fr) auto;
++    margin-top: 10px;
++  }
++
++  .market-page .filter-rail .filter-submit .icon {
++    display: none;
++  }
++
++  .market-page .filter-rail .filter-submit > .button {
++    padding-inline: 8px;
++  }
++
++  .market-page .mobile-filter {
++    display: none;
++  }
++}
++
++@media (min-width: 900px) and (max-width: 1050px) {
++  .market-page .market-layout .product-grid {
++    grid-template-columns: repeat(3, minmax(0, 1fr));
++  }
++}
++
++@media (max-width: 700px) {
++  .market-page .market-heading > .text-link {
++    display: none;
++  }
++
++  .market-page .result-tools {
++    gap: 8px;
++  }
++
++  .market-page .category-chips {
++    flex-wrap: wrap;
++    gap: 6px;
++  }
++
++  .market-page .chip {
++    padding-inline: 9px;
++    font-size: 12px;
++  }
++
++  .market-page .quick-filter {
++    display: none;
++  }
++}
