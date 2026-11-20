@@ -113,7 +113,7 @@ test("creates a job, reports honest stages and serves the artifact", async () =>
   id = created.json.id;
   const dto = await waitFor(id, "ready");
   assert.equal(dto.artifact.format, "ply");
-  assert.equal(dto.artifact.splatCount, 64);
+  assert.equal(dto.artifact.splatCount, 4096);
   assert.equal(dto.artifact.url, `/api/scans/${id}/result/scan.ply`);
   assert.equal(dto.artifact.stills.length, 3);
   const result = await request(dto.artifact.url);
@@ -121,7 +121,7 @@ test("creates a job, reports honest stages and serves the artifact", async () =>
   assert.match(result.text, /^ply\r?\n/);
   const frame = await request(dto.artifact.stills[0]);
   assert.equal(frame.status, 200);
-  assert.match(frame.headers["content-type"], /svg/);
+  assert.match(frame.headers["content-type"], /webp/);
   assert.equal(dto.meta.title, "Kursi");
   assert.equal(dto.media.durationS, 12.3);
   assert.equal(dto.provenance.frames.registered, 78);

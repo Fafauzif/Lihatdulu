@@ -72,6 +72,28 @@ export function nextPollDelay(attempt) {
   return steps[Math.min(steps.length - 1, Math.max(0, Number(attempt) || 0))];
 }
 
+const decimal = (value) => String(value).replace(".", ",");
+
+export function formatDimensions(meta) {
+  if (!meta) return "Ukuran belum dicatat";
+  return `${decimal(meta.widthCm)} × ${decimal(meta.depthCm)} × ${decimal(meta.heightCm)} cm`;
+}
+
+export function formatArtifactSize(bytes) {
+  const megabytes = (Number(bytes) || 0) / 1048576;
+  if (!Number.isFinite(megabytes) || megabytes <= 0) return "0 MB";
+  return `${megabytes.toFixed(1).replace(".", ",")} MB`;
+}
+
+export function formatDuration(ms) {
+  const total = Math.max(0, Math.round((Number(ms) || 0) / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return minutes
+    ? `${minutes} mnt ${String(seconds).padStart(2, "0")} dtk`
+    : `${seconds} dtk`;
+}
+
 export function buildMetaQuery(meta) {
   const params = new URLSearchParams();
   params.set("title", meta.title);

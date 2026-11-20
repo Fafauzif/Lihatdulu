@@ -1,5 +1,6 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { jobPaths } from "./scan-jobs.mjs";
 import { ScanError } from "./scan-errors.mjs";
 
@@ -20,15 +21,15 @@ function fixturePly() {
   const header = [
     "ply",
     "format ascii 1.0",
-    `element vertex 64`,
+    `element vertex 4096`,
     ...properties.map((name) => `property float ${name}`),
     "end_header",
   ].join("\n");
   const rows = [];
-  for (let index = 0; index < 64; index++) {
-    const x = ((index % 4) - 1.5) * 0.08;
-    const y = (Math.floor(index / 4) % 4 - 1.5) * 0.08;
-    const z = (Math.floor(index / 16) - 0.5) * 0.08;
+  for (let index = 0; index < 4096; index++) {
+    const x = ((index % 16) - 7.5) * 0.035;
+    const y = ((Math.floor(index / 16) % 16) - 7.5) * 0.035;
+    const z = (Math.floor(index / 256) - 7.5) * 0.035;
     const values = [
       x, y, z, 0, 0, 0,
       0.2 + (index % 3) * 0.1, 0.35, 0.6,
@@ -41,9 +42,11 @@ function fixturePly() {
   return `${header}\n${rows.join("\n")}\n`;
 }
 
-function stillSvg(index) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="#e8efe9"/><text x="20" y="105" font-family="sans-serif" font-size="18" fill="#1b2420">Bingkai ${index + 1} dari rekaman</text></svg>`;
-}
+const STILL_SOURCES = [
+  "/images/catalogue/arca-chair.webp",
+  "/images/examples/tala.webp",
+  "/images/examples/loka.webp",
+];
 
 export async function runFakePipeline(record, { root, updateStage }) {
   const paths = jobPaths(root, record.id);
@@ -63,10 +66,14 @@ export async function runFakePipeline(record, { root, updateStage }) {
   await mkdir(paths.stills, { recursive: true });
   const file = join(paths.output, "scan.ply");
   await writeFile(file, fixturePly(), "utf8");
+  const publicRoot = fileURLToPath(new URL("../public", import.meta.url));
   const stills = [];
-  for (let index = 0; index < 3; index++) {
-    const name = `00${index}.svg`;
-    await writeFile(join(paths.stills, name), stillSvg(index), "utf8");
+  for (let index = 0; index < STILL_SOURCES.length; index++) {
+    const name = `00${index}.webp`;
+    await copyFile(
+      join(publicRoot, STILL_SOURCES[index].replace(/^\//, "")),
+      join(paths.stills, name),
+    );
     stills.push(name);
   }
   const bytes = (await stat(file)).size;
@@ -79,8 +86,14 @@ export async function runFakePipeline(record, { root, updateStage }) {
   const provenance = {
     source: { clipSeconds: 12.3, device: record.meta.device },
     frames: { extracted: 90, registered: 78, ratio: 0.8667 },
-    timings: { extractMs: 1, alignMs: 1, trainMs: 1, convertMs: 1, totalMs: 5 },
-    artifact: { format: "ply", bytes, splatCount: 64 },
+    timings: {
+      extractMs: 4200,
+      alignMs: 61000,
+      trainMs: 118000,
+      convertMs: 1800,
+      totalMs: 185000,
+    },
+    artifact: { format: "ply", bytes, splatCount: 4096 },
     tools: {
       ffmpeg: "fake",
       colmap: "fake",
@@ -94,7 +107,7 @@ export async function runFakePipeline(record, { root, updateStage }) {
     artifact: {
       format: "ply",
       bytes,
-      splatCount: 64,
+      splatCount: 4096,
       file: "scan.ply",
       stills,
     },
