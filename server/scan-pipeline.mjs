@@ -263,10 +263,10 @@ async function findClip(paths) {
   return join(paths.dir, name);
 }
 
-async function readToolVersions(runTool) {
+async function readToolVersions(runTool, cwd) {
   const read = async (name, args) => {
     try {
-      const result = await runTool(name, args, { timeoutMs: 15_000 });
+      const result = await runTool(name, args, { cwd, timeoutMs: 15_000 });
       return (result.stdout ?? "").trim().split(/\r?\n/)[0] ?? "";
     } catch {
       return "";
@@ -295,6 +295,7 @@ export async function runRealPipeline(
   const tool = (name, args, options = {}) =>
     runTool(name, args, { ...options, signal });
   const paths = jobPaths(root, record.id);
+  await mkdir(paths.logs, { recursive: true });
   const timings = { extractMs: 0, alignMs: 0, trainMs: 0, convertMs: 0, totalMs: 0 };
   const free = await diskFree(root);
   if (Number.isFinite(free) && free < rules.minFreeBytes)
@@ -344,25 +345,27 @@ export async function runRealPipeline(
   await mkdir(paths.work, { recursive: true });
   const database = join(paths.work, "db.db");
   const sparse = join(paths.work, "sparse");
+  await mkdir(sparse, { recursive: true });
   const alignStarted = Date.now();
   const feature = await tool(
     "colmap",
     buildFeatureArgs({ database, images: paths.frames }),
-    { timeoutMs: TIMEOUTS.feature, logPath: join(paths.logs, "colmap-feature.log") },
+    { cwd: paths.logs, timeoutMs: TIMEOUTS.feature, logPath: join(paths.logs, "colmap-feature.log") },
   );
   const match = await tool("colmap", buildMatchArgs({ database }), {
+    cwd: paths.logs,
     timeoutMs: TIMEOUTS.match,
     logPath: join(paths.logs, "colmap-match.log"),
   });
   const map = await tool(
     "colmap",
     buildMapperArgs({ database, images: paths.frames, sparse }),
-    { timeoutMs: TIMEOUTS.mapper, logPath: join(paths.logs, "colmap-map.log") },
+    { cwd: paths.logs, timeoutMs: TIMEOUTS.mapper, logPath: join(paths.logs, "colmap-map.log") },
   );
   const analyze = await tool(
     "colmap",
     buildAnalyzeArgs({ model: join(sparse, "0") }),
-    { timeoutMs: TIMEOUTS.ffprobe, logPath: join(paths.logs, "colmap-analyze.log") },
+    { cwd: paths.logs, timeoutMs: TIMEOUTS.ffprobe, logPath: join(paths.logs, "colmap-analyze.log") },
   );
   timings.alignMs =
     feature.ms + match.ms + map.ms + analyze.ms || Date.now() - alignStarted;
@@ -447,7 +450,7 @@ export async function runRealPipeline(
   };
   timings.totalMs =
     timings.extractMs + timings.alignMs + timings.trainMs + timings.convertMs;
-  const tools = await readToolVersions(runTool);
+  const tools = await readToolVersions(runTool, paths.logs);
   const provenance = buildProvenance({
     media,
     device: record.meta.device,
@@ -460,4 +463,5 @@ export async function runRealPipeline(
   await rm(paths.work, { recursive: true, force: true });
   return { media, provenance, artifact };
 }
+
 

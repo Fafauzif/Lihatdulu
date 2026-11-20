@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ScanError } from "./scan-errors.mjs";
 
@@ -69,6 +69,8 @@ export async function runTool(
   const started = Date.now();
   const output = [];
   const tail = [];
+  if (cwd) await mkdir(cwd, { recursive: true });
+  if (logPath) await mkdir(dirname(logPath), { recursive: true });
   const text = (chunk) => {
     const value = chunk.toString("utf8");
     output.push(value);
