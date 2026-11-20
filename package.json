@@ -15,7 +15,8 @@
     "test:legacy": "node scripts/verify-stitch.mjs",
     "scan:api": "node server/scan-server.mjs --api-only",
     "scan:serve": "node server/scan-server.mjs",
-    "scan:fake": "node server/scan-server.mjs --fake"
+    "scan:fake": "node server/scan-server.mjs --fake",
+    "test:scan": "node --test tests/scan-*.test.js && node scripts/verify-scan.mjs"
   },
   "keywords": [],
   "author": "",
