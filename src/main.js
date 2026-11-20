@@ -235,7 +235,7 @@ function marketplace() {
   const groupCount = activeGroupCount(f);
   const collections = parentCollections(catalogue()).slice(0, 3);
   return shell(
-    `<div class="market-heading"><div><span class="eyebrow">TEMUKAN TEMPAT BARUNYA</span><h1>Koleksi furnitur</h1></div>${link("/cari-dari-foto", icon("camera") + " Demo acuan foto", "text-link")}</div><nav class="category-chips" aria-label="Jelajahi kategori">${button("Semua", "category", "chip " + (!f.categories.length ? "selected" : ""), `data-category="" aria-pressed="${!f.categories.length}"`)}${collections.map((c) => button(`${c.label} <small>${c.count}</small>`, "parent-category", "chip " + (f.categories.length && f.categories.join(",") === c.categories.join(",") ? "selected" : ""), `data-category="${c.id}" aria-pressed="${f.categories.join(",") === c.categories.join(",")}"`)).join("")}${link("/beli?model=1", icon("cube") + " 3D tersedia", "chip")}${link("/beli?max=1500000", "Hingga Rp 1,5 juta", "chip")}</nav><div class="market-layout"><aside class="filter-rail" aria-label="Filter katalog">${filterForm(f)}</aside><section class="catalogue-results" id="catalogue-results" tabindex="-1" aria-label="Hasil katalog"><div class="result-toolbar"><strong data-result-count>${items.length} furnitur ditemukan</strong><div class="result-tools">${button(icon("filter") + ` Filter${groupCount ? " (" + groupCount + ")" : ""}`, "open-filters", "button secondary mobile-filter", `aria-label="Filter, ${groupCount} kelompok aktif"`)}<label class="sort-label"><span>Urutkan</span><select data-sort aria-label="Urutkan furnitur">${[
+    `<div class="market-heading"><h1>Furnitur bekas</h1>${link("/cari-dari-foto", icon("camera") + " Demo acuan foto", "text-link")}</div><nav class="category-chips" aria-label="Jelajahi kategori">${button("Semua", "category", "chip " + (!f.categories.length ? "selected" : ""), `data-category="" aria-pressed="${!f.categories.length}"`)}${collections.map((c) => button(`${c.label} <small>${c.count}</small>`, "parent-category", "chip " + (f.categories.length && f.categories.join(",") === c.categories.join(",") ? "selected" : ""), `data-category="${c.id}" aria-pressed="${f.categories.join(",") === c.categories.join(",")}"`)).join("")}${link("/beli?model=1", icon("cube") + " 3D tersedia", "chip quick-filter")}${link("/beli?max=1500000", "Hingga Rp 1,5 juta", "chip quick-filter")}</nav><div class="market-layout"><aside class="filter-rail" aria-label="Filter katalog">${filterForm(f)}</aside><section class="catalogue-results" id="catalogue-results" tabindex="-1" aria-label="Hasil katalog"><div class="result-toolbar"><strong data-result-count>${items.length} furnitur ditemukan</strong><div class="result-tools">${button(icon("filter") + ` Filter${groupCount ? " (" + groupCount + ")" : ""}`, "open-filters", "button secondary mobile-filter", `aria-label="Filter, ${groupCount} kelompok aktif"`)}<label class="sort-label"><span>Urutkan</span><select data-sort aria-label="Urutkan furnitur">${[
       ["relevance", "Pilihan LihatDulu"],
       ["newest", "Terbaru"],
       ["price-asc", "Harga terendah"],
@@ -440,7 +440,7 @@ function cartPage(review = false) {
 function setPageMetadata(path) {
   const titles = {
     "/": "Furnitur bekas, lebih jelas sebelum dipilih",
-    "/beli": "Koleksi furnitur",
+    "/beli": "Furnitur bekas",
     "/tersimpan": "Pilihan, draf & ringkasan tersimpan",
     "/bandingkan": "Bandingkan furnitur",
     "/keranjang": "Keranjang furnitur",
@@ -472,6 +472,7 @@ function render() {
   dispose();
   dispose = () => {};
   const path = location.pathname.replace(/\/$/, "") || "/";
+  document.body.classList.toggle("on-marketplace", path === "/beli");
   document.body.classList.toggle("capture-page", path === "/jual/sora/rekam");
   document.body.classList.toggle("on-product", path.startsWith("/barang/"));
   document.body.classList.toggle(
