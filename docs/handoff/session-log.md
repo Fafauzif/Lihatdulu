@@ -1,5 +1,14 @@
 # Session log
 
+## 2026-11-20 · Real scan workflow implemented, hardware proof pending
+
+- Branch `feat/real-furniture-scan` from `main`. Plan: [2026-11-20-real-furniture-scan](../superpowers/plans/2026-11-20-real-furniture-scan.md). Tasks 2–12 implemented; Task 1 is partially done (tools unpacked and exact CLI recorded); Task 13 still needs a physical chair and phone.
+- Added `server/scan-*.mjs` (job store, metadata, API, tool runner, FFmpeg→COLMAP→Brush→SPZ pipeline, provenance, fake pipeline), `vite.config.js` (dev `/api` proxy), two lazy routes (`/jual/pindai`, `/pindai/:id`), SparkJS viewer, seller entry, and `scripts/verify-scan.mjs`.
+- Commands/results: `npm run test:unit` 182 pass / 0 fail; `node scripts/verify-scan.mjs` 15/15; `node scripts/verify-v8.mjs` 26/26 against the production bundle. Known-dataset smoke: prepared Sora clip registered 2/54 frames and failed honestly; public South Building sample trained Brush (122 158 splats, 2.2 MB SPZ) and loaded in the in-site viewer.
+- Toolchain evidence: [scan-toolchain.md](scan-toolchain.md). Tools live under git-ignored `var/tools`; set `SCAN_COLMAP` to `var/tools/colmap/bin/colmap.exe` and `SCAN_BRUSH` to `var/tools/brush/brush_app.exe` (the binary is `brush_app.exe`, not `brush`). `cloudflared` is not installed yet.
+- Evidence outside the repo: `C:\Users\fauzi\OneDrive\Documents\qa-scan` (scan e2e report/screenshots) and `qa-v8`. `dist/` was restored after verification; run `npm run build` before `npm run scan:serve`.
+- Next unfinished step: record one 30–45 s rear-camera clip of a real chair, finish the Task 1 registration/timing/go-no-go numbers, then run Task 13 on the phone over a tunnel.
+
 ## 2026-11-20 · Platform-wide white-and-green redesign
 
 - Branch `main`, baseline `ed42282` (the catalogue-only pilot). Goal: carry the white-and-green direction from `/beli` across every route without changing URLs, filtering, saved/cart/offer state, prices, checkout eligibility, media provenance or viewer behavior.

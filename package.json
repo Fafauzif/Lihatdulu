@@ -12,7 +12,11 @@
     "test:production": "node scripts/verify-v6-production.mjs",
     "generate:products": "node scripts/render-core-assets.mjs",
     "test:browser": "node scripts/verify-v8.mjs",
-    "test:legacy": "node scripts/verify-stitch.mjs"
+    "test:legacy": "node scripts/verify-stitch.mjs",
+    "scan:api": "node server/scan-server.mjs --api-only",
+    "scan:serve": "node server/scan-server.mjs",
+    "scan:fake": "node server/scan-server.mjs --fake",
+    "test:scan": "node --test tests/scan-*.test.js && node scripts/verify-scan.mjs"
   },
   "keywords": [],
   "author": "",
@@ -21,10 +25,12 @@
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@playwright/test": "^1.63.0",
+    "@sparkjsdev/spark": "^2.4.0",
     "three": "^0.186.1",
     "vite": "^8.3.2"
   },
   "devDependencies": {
+    "@playcanvas/splat-transform": "^3.12.0",
     "@sparticuz/chromium": "^153.0.0"
   }
 }

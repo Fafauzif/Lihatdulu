@@ -450,18 +450,20 @@ function setPageMetadata(path) {
     "/tentang": "Panduan kondisi & ukuran",
     "/cari-dari-foto": "Demo pencarian dari foto",
     "/jual": "Ruang penjual Sora",
+    "/jual/pindai": "Pindai furnitur",
     "/jual/sora/rekam": "Video bukti Sora",
     "/jual/sora/tinjau": "Tinjau bukti Sora",
   };
   const item = path.startsWith("/barang/")
     ? getListing(path.split("/")[2])
     : null;
+  const fallback = path.startsWith("/pindai/")
+    ? "Hasil pindai"
+    : path.startsWith("/toko/")
+      ? "Koleksi penjual"
+      : "Halaman belum tersedia";
   document.title =
-    (item?.title ||
-      titles[path] ||
-      (path.startsWith("/toko/")
-        ? "Koleksi penjual"
-        : "Halaman belum tersedia")) + " · LihatDulu";
+    (item?.title || titles[path] || fallback) + " · LihatDulu";
   const description = item
     ? `${item.title}. ${dims(item)}. ${item.available ? formatPrice(item.price) + ". " : ""}${item.condition || "Koleksi berikutnya"}. Katalog furnitur contoh LihatDulu.`
     : "Jelajahi 10 furnitur contoh, bandingkan ukuran dan kondisi, lalu simpan pilihan di perangkat ini.";
@@ -475,6 +477,8 @@ function render() {
   const path = location.pathname.replace(/\/$/, "") || "/";
   document.body.classList.toggle("on-marketplace", path === "/beli");
   document.body.classList.toggle("capture-page", path === "/jual/sora/rekam");
+  document.body.classList.toggle("scan-capture-page", path === "/jual/pindai");
+  document.body.classList.toggle("scan-page", path.startsWith("/pindai/"));
   document.body.classList.toggle("on-product", path.startsWith("/barang/"));
   document.body.classList.toggle(
     "has-compare-tray",
@@ -495,7 +499,57 @@ function render() {
   else if (path === "/tentang") app.innerHTML = about();
   else if (path.startsWith("/toko/"))
     app.innerHTML = storePage(path.split("/")[2]);
-  else if (["/jual", "/buat", "/barang-saya"].includes(path))
+  else if (path === "/jual/pindai") {
+    app.innerHTML = `<main id="main" tabindex="-1"><p class="scan-loading" role="status">Menyiapkan kamera…</p></main>`;
+    let cancelled = false;
+    let cleanup = () => {};
+    import("./scan-capture.js")
+      .then((module) => {
+        if (cancelled) return;
+        app.innerHTML = `<main id="main" tabindex="-1">${module.renderScanCapture()}</main>`;
+        cleanup = module.mountScanCapture(app, {
+          onNavigate: navigate,
+          onToast: toast,
+        });
+      })
+      .catch(() => {
+        if (!cancelled)
+          app.innerHTML = `<main id="main" tabindex="-1"><p class="scan-loading" role="alert">Kamera belum bisa dimuat. <a href="/jual" data-nav>Kembali ke ruang penjual</a></p></main>`;
+      });
+    dispose = () => {
+      cancelled = true;
+      cleanup();
+    };
+  } else if (path.startsWith("/pindai/")) {
+    const id = path.split("/")[2] ?? "";
+    app.innerHTML = shell(
+      `<section class="scan-preview"><p class="scan-loading" role="status">Memuat hasil pindai…</p></section>`,
+      "scan-page",
+    );
+    let cancelled = false;
+    let cleanup = () => {};
+    import("./scan-preview.js")
+      .then((module) => {
+        if (cancelled) return;
+        app.innerHTML = shell(module.renderScanPreview(id), "scan-page");
+        cleanup = module.mountScanPreview(app, {
+          id,
+          onNavigate: navigate,
+          onToast: toast,
+        });
+      })
+      .catch(() => {
+        if (!cancelled)
+          app.innerHTML = shell(
+            `<section class="scan-preview"><h1>Hasil pindai belum bisa dimuat.</h1><p><a href="/jual/pindai" data-nav>Rekam barang lain</a></p></section>`,
+            "scan-page",
+          );
+      });
+    dispose = () => {
+      cancelled = true;
+      cleanup();
+    };
+  } else if (["/jual", "/buat", "/barang-saya"].includes(path))
     app.innerHTML = shell(renderVideoWorkspace(sora), "seller-page");
   else if (path === "/jual/sora/rekam")
     app.innerHTML = `<main id="main" tabindex="-1">${renderVideoCapture(sora)}</main>`;

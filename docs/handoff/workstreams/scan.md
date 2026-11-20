@@ -20,6 +20,12 @@ Seller entry `/jual` → **Pindai furnitur** → rear camera and **Mulai pindai*
 - Proposed endpoints, to confirm when implementing: **POST** `/api/scans` receives a finished clip and returns a job ID; **GET** `/api/scans/:id` reports current stage or a useful retake/failure reason; **GET** `/api/scans/:id/result` serves/redirects to the validated artifact once ready. Use honest stages such as Uploading, Queued, Extracting frames, Aligning cameras, Reconstructing, Ready and Failed. Poll by ID; associate the view with the job that came from that specific capture. Handle duplicate submits, retry, interrupted worker jobs and leaving/returning.
 - Use a dedicated splat viewer and lazy-load it. Give the scan its own provenance, condition photos and manually measured dimensions. Keep GLB kinematics and room fit tied to the existing geometry. The frontend stays in the current stack. For public rollout, persistent listings/ownership, isolated job workers, private media storage and sharing can be designed after the proof.
 
+## Status 20 November 2026
+
+- The web/API half is implemented on `feat/real-furniture-scan`: `/jual/pindai` capture, automatic upload, honest job stages, `/pindai/:id` preview with SparkJS, provenance and stills, and a fake pipeline for tests.
+- The worker is implemented with the recorded COLMAP 4.2.1 and Brush 0.3.0 commands. It is validated on a public dataset and on the prepared Sora clip's honest failure, **not** on a real chair.
+- Still missing: one real 30–45 s chair clip, the Task 1 registration/timing numbers and go/no-go, a physical phone run, and the tunnel proof. Do not mark the acceptance section below as proven until those exist.
+
 ## Acceptance before judging
 
 - Capture a fresh clip from the intended physical phone. No file transfer by hand. Valid input displays the same item as an interactive scan inside LihatDulu. Note the measured end-to-end time.
