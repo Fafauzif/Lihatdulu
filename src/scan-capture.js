@@ -1,5 +1,6 @@
 import "./scan-capture.css";
 import { icon } from "./components.js";
+import { ERROR_COPY, uploadScan } from "./scan-api.js";
 import {
   GUIDANCE,
   MAX_SECONDS,
@@ -61,7 +62,11 @@ export function renderScanCapture() {
           </fieldset>
           <label class="scan-field"><span>Catatan kondisi <small>opsional</small></span><textarea name="conditionNote" rows="3" maxlength="200" placeholder="Goresan ringan di sisi kiri."></textarea></label>
           <p class="scan-form-error" data-scan-error role="alert" hidden></p>
-          <button type="submit" class="scan-button primary" data-scan-send disabled>Kirim ke laptop</button>
+          <div class="scan-submit-row">
+            <button type="submit" class="scan-button primary" data-scan-send disabled>Kirim ke laptop</button>
+            <button type="button" class="scan-button secondary" data-scan-cancel hidden>Batalkan</button>
+          </div>
+          <progress class="scan-progress" data-scan-progress max="100" value="0" hidden>0%</progress>
         </form>
         <ol class="scan-steps" aria-label="Panduan rekaman">
           ${GUIDANCE.map((step, index) => `<li><span>${index + 1}</span>${step}</li>`).join("")}
@@ -94,6 +99,8 @@ export function mountScanCapture(root, { onNavigate, onToast } = {}) {
   const retakeButton = $("[data-scan-retake]");
   const lastButton = $("[data-scan-last]");
   const sendButton = $("[data-scan-send]");
+  const cancelButton = $("[data-scan-cancel]");
+  const progress = $("[data-scan-progress]");
 
   let stream = null;
   let recorder = null;
@@ -105,6 +112,8 @@ export function mountScanCapture(root, { onNavigate, onToast } = {}) {
   let blob = null;
   let objectUrl = null;
   let disposed = false;
+  let upload = null;
+  let uploading = false;
 
   function say(message, tone = "") {
     status.textContent = message;
@@ -144,6 +153,10 @@ export function mountScanCapture(root, { onNavigate, onToast } = {}) {
     useButton.hidden = true;
     retakeButton.hidden = true;
     sendButton.disabled = true;
+    sendButton.textContent = "Kirim ke laptop";
+    progress.hidden = true;
+    progress.value = 0;
+    cancelButton.hidden = true;
   }
 
   function resetToIdle(message = "") {
@@ -297,9 +310,14 @@ export function mountScanCapture(root, { onNavigate, onToast } = {}) {
 
   function useRecording() {
     if (!blob) return;
-    pendingClip = { blob, mime: blob.type || "video/webm" };
+    pendingClip = {
+      blob,
+      mime: blob.type || "video/webm",
+      clientId: crypto.randomUUID(),
+    };
     form.hidden = false;
     sendButton.disabled = false;
+    sendButton.textContent = "Kirim ke laptop";
     say("Rekaman siap dikirim. Isi detail barang.", "ok");
     const first = form.querySelector('[name="title"]');
     first?.focus({ preventScroll: true });
@@ -321,6 +339,8 @@ export function mountScanCapture(root, { onNavigate, onToast } = {}) {
   }
 
   function retake() {
+    pendingClip = null;
+    lastButton.hidden = true;
     releaseReview();
     setCameraReady(false);
     startButton.hidden = false;
@@ -382,6 +402,42 @@ export function mountScanCapture(root, { onNavigate, onToast } = {}) {
     };
   }
 
+  async function submitRecording(meta) {
+    if (!pendingClip || uploading) return;
+    uploading = true;
+    sendButton.disabled = true;
+    sendButton.textContent = "Mengirim… 0%";
+    progress.hidden = false;
+    progress.value = 0;
+    cancelButton.hidden = false;
+    say("Mengirim rekaman ke laptop demo…");
+    upload = uploadScan(
+      { ...meta, clientId: pendingClip.clientId },
+      pendingClip.blob,
+      (percent) => {
+        progress.value = percent;
+        sendButton.textContent = `Mengirim… ${percent}%`;
+      },
+    );
+    try {
+      const result = await upload.promise;
+      if (!result?.id) throw new Error("Jawaban server tidak lengkap.");
+      pendingClip = null;
+      say("Rekaman diterima. Membuka status…", "ok");
+      onNavigate?.(`/pindai/${result.id}`);
+    } catch (error) {
+      const code = error?.code ?? "internal";
+      say(ERROR_COPY[code] ?? ERROR_COPY.default, "error");
+      sendButton.textContent = "Coba kirim lagi";
+      sendButton.disabled = false;
+      progress.hidden = true;
+    } finally {
+      uploading = false;
+      upload = null;
+      cancelButton.hidden = true;
+    }
+  }
+
   function onPageHide() {
     if (recording) {
       recording = false;
@@ -403,7 +459,14 @@ export function mountScanCapture(root, { onNavigate, onToast } = {}) {
   });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    validateForm();
+    if (uploading) return;
+    const meta = validateForm();
+    if (meta) void submitRecording(meta);
+  });
+  cancelButton.addEventListener("click", () => {
+    try {
+      upload?.abort();
+    } catch {}
   });
   window.addEventListener("pagehide", onPageHide);
 
@@ -413,6 +476,9 @@ export function mountScanCapture(root, { onNavigate, onToast } = {}) {
     disposed = true;
     clearInterval(ticker);
     window.removeEventListener("pagehide", onPageHide);
+    try {
+      upload?.abort();
+    } catch {}
     try {
       if (recorder && recorder.state !== "inactive") recorder.stop();
     } catch {}
