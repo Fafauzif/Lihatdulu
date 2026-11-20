@@ -73,7 +73,7 @@ export function renderOfferComposer(
   const noteValue = note ?? draft?.note ?? "";
   const parsed = parseRupiahInput(value);
   return `<form data-offer data-id="${esc(item.id)}" class="composer buyer-offer-composer" novalidate>
-    <header><span class="eyebrow">CATATAN PRIBADI</span><h2 id="offer-title">Draf penawaran</h2></header>
+    <header><h2 id="offer-title">Draf penawaran</h2></header>
     <div class="buyer-offer-context">${image(item.photos[0])}<div><h3>${esc(item.title)}</h3><p>${esc(item.seller.name)} · ${esc(item.location)}</p><span>1 barang</span></div></div>
     <p id="offer-scope">Simpan rencana harga dan catatan di perangkat ini. Draf belum dikirim kepada penjual dan tidak mengubah harga di keranjang.</p>
     ${draft ? offerHistory(draft, item) : ""}
@@ -175,7 +175,7 @@ export function renderBuyerSaved({
           .map((record) => {
             const item = getListing(record.listingId);
             return item
-              ? `<article class="buyer-record-card"><div class="buyer-record-context">${link("/barang/" + item.id, image(item.photos[0]))}<div><span class="eyebrow">1 BARANG · DRAF LOKAL</span><h2>${link("/barang/" + item.id, esc(item.title))}</h2><p>${esc(item.seller.name)} · ${esc(item.location)}</p></div></div><div class="buyer-record-numbers"><span>Harga barang saat ini <strong>${formatPrice(item.price)}</strong></span><span>Penawaran pribadi <strong>${formatPrice(record.amountIdr)}</strong></span></div>${record.note ? `<p class="buyer-saved-note">${esc(record.note)}</p>` : '<p class="buyer-record-hint">Tanpa catatan tambahan.</p>'}<span class="buyer-storage-label">${esc(persistenceCopy(buyerPersistenceStatus()))} · belum dikirim</span>${offerHistory(record, item)}<div class="buyer-record-actions">${button("Lihat / ubah draf", "offer", "button secondary", `data-id="${esc(item.id)}"`)}${button("Hapus draf", "delete-offer", "text-button buyer-delete", `data-id="${esc(item.id)}"`)}</div></article>`
+              ? `<article class="buyer-record-card"><div class="buyer-record-context">${link("/barang/" + item.id, image(item.photos[0]))}<div><h2>${link("/barang/" + item.id, esc(item.title))}</h2><p>${esc(item.seller.name)} · ${esc(item.location)}</p></div></div><div class="buyer-record-numbers"><span>Harga barang saat ini <strong>${formatPrice(item.price)}</strong></span><span>Penawaran pribadi <strong>${formatPrice(record.amountIdr)}</strong></span></div>${record.note ? `<p class="buyer-saved-note">${esc(record.note)}</p>` : '<p class="buyer-record-hint">Tanpa catatan tambahan.</p>'}<span class="buyer-storage-label">${esc(persistenceCopy(buyerPersistenceStatus()))} · belum dikirim</span>${offerHistory(record, item)}<div class="buyer-record-actions">${button("Lihat / ubah draf", "offer", "button secondary", `data-id="${esc(item.id)}"`)}${button("Hapus draf", "delete-offer", "text-button buyer-delete", `data-id="${esc(item.id)}"`)}</div></article>`
               : "";
           })
           .join("")}</div>`
@@ -185,14 +185,14 @@ export function renderBuyerSaved({
         );
   if (selected === "ringkasan")
     content = summaries.length
-      ? `<p class="buyer-workspace-intro">Hingga 10 ringkasan terakhir. Isi ringkasan mengikuti pilihan saat disimpan.</p><div class="buyer-record-list">${summaries.map((record) => `<article class="buyer-record-card buyer-summary-card"><div><span class="eyebrow">RINGKASAN LOKAL</span><h2>${record.items.length} barang · ${formatPrice(record.total)}</h2><p>${esc(buyerDate(record.savedAt))}</p><p>${record.items.map((item) => esc(item.title)).join(" · ")}</p><span class="buyer-storage-label">${esc(persistenceCopy(buyerPersistenceStatus()))}</span></div><div class="buyer-record-actions">${link("/tersimpan?view=ringkasan&summary=" + encodeURIComponent(record.id), "Buka ringkasan " + icon("arrow"), "button secondary")}${button("Hapus", "delete-summary", "text-button buyer-delete", `data-id="${esc(record.id)}" aria-label="Hapus ringkasan ${esc(buyerDate(record.savedAt))}"`)}</div></article>`).join("")}</div>`
+      ? `<p class="buyer-workspace-intro">Hingga 10 ringkasan terakhir. Isi ringkasan mengikuti pilihan saat disimpan.</p><div class="buyer-record-list">${summaries.map((record) => `<article class="buyer-record-card buyer-summary-card"><div><h2>${record.items.length} barang · ${formatPrice(record.total)}</h2><p>${esc(buyerDate(record.savedAt))}</p><p>${record.items.map((item) => esc(item.title)).join(" · ")}</p><span class="buyer-storage-label">${esc(persistenceCopy(buyerPersistenceStatus()))}</span></div><div class="buyer-record-actions">${link("/tersimpan?view=ringkasan&summary=" + encodeURIComponent(record.id), "Buka ringkasan " + icon("arrow"), "button secondary")}${button("Hapus", "delete-summary", "text-button buyer-delete", `data-id="${esc(record.id)}" aria-label="Hapus ringkasan ${esc(buyerDate(record.savedAt))}"`)}</div></article>`).join("")}</div>`
       : empty(
           "Belum ada ringkasan",
           "Tambahkan furnitur ke keranjang, tinjau total contoh, lalu simpan ringkasannya.",
           "/keranjang",
           "Buka keranjang",
         );
-  return `<div class="page-heading buyer-workspace-heading"><span class="eyebrow">RUANG UNTUK MEMPERTIMBANGKAN</span><h1>Pilihan tersimpan.</h1><p>Barang dan catatan pribadi di browser ini.</p></div><nav class="buyer-workspace-tabs" aria-label="Pilihan tersimpan">${tabs.map(([id, label, count]) => link("/tersimpan?view=" + id, `${label}<span>${count}</span>`, selected === id ? "selected" : "", selected === id ? 'aria-current="page"' : "")).join("")}</nav>${recordsNotice()}${undoNotice()}${content}`;
+  return `<div class="page-heading buyer-workspace-heading"><h1>Pilihan tersimpan.</h1><p>Barang dan catatan pribadi di browser ini.</p></div><nav class="buyer-workspace-tabs" aria-label="Pilihan tersimpan">${tabs.map(([id, label, count]) => link("/tersimpan?view=" + id, `${label}<span>${count}</span>`, selected === id ? "selected" : "", selected === id ? 'aria-current="page"' : "")).join("")}</nav>${recordsNotice()}${undoNotice()}${content}`;
 }
 
 const totalList = (totals) =>
@@ -207,7 +207,7 @@ export function renderBuyerCart({ review = false, undoCartId = null } = {}) {
   const undo = undoCartId
     ? `<div class="buyer-undo" role="status"><span>Barang dihapus dari keranjang.</span>${button("Urungkan", "undo-cart", "text-button", `data-id="${esc(undoCartId)}"`)}</div>`
     : "";
-  const heading = `<div class="page-heading"><span class="eyebrow">${review ? "SEBELUM MENYIMPAN" : "PILIHAN UNTUK RUANGMU"}</span><h1>${review ? "Tinjau pilihanmu." : "Keranjang furnitur."}</h1><p>${review ? "Periksa barang, cara menerima, dan total contoh yang akan disimpan." : `${totals.items.length} barang · satu unit untuk setiap furnitur.`}</p></div>${marketPersistenceStatus() === "temporary-in-tab" ? '<p class="buyer-notice">Keranjang tersedia selama sesi ini. Penyimpanan perangkat tidak tersedia.</p>' : ""}${undo}${excluded}`;
+  const heading = `<div class="page-heading"><h1>${review ? "Tinjau pilihanmu." : "Keranjang furnitur."}</h1><p>${review ? "Periksa barang, cara menerima, dan total contoh yang akan disimpan." : `${totals.items.length} barang · satu unit untuk setiap furnitur.`}</p></div>${marketPersistenceStatus() === "temporary-in-tab" ? '<p class="buyer-notice">Keranjang tersedia selama sesi ini. Penyimpanan perangkat tidak tersedia.</p>' : ""}${undo}${excluded}`;
   if (!totals.items.length)
     return (
       heading +
@@ -236,7 +236,7 @@ export function renderSavedSummary(id) {
   if (!record)
     return `<div class="page-heading"><h1>Ringkasan tidak ditemukan.</h1></div>${empty("Lihat ringkasan lain", "Ringkasan ini mungkin dihapus atau tidak tersedia di browser ini.", "/tersimpan?view=ringkasan", "Buka ringkasan tersimpan")}`;
   const outcome = buyerPersistenceStatus();
-  return `<div class="breadcrumb">${link("/tersimpan?view=ringkasan", "Ringkasan tersimpan")}<span>/</span>Ringkasan pilihan</div><div class="page-heading buyer-snapshot-heading"><span class="eyebrow">CATATAN PILIHAN LOKAL</span><h1>${outcome === "device-persistent" ? "Ringkasan tersimpan di perangkat ini." : "Ringkasan tersedia selama sesi ini."}</h1><p>Disimpan ${esc(buyerDate(record.savedAt))}. Isi mengikuti pilihan saat disimpan.</p></div>${recordsNotice()}${undoNotice()}<div class="cart-layout buyer-cart-layout buyer-snapshot-layout"><section aria-label="Barang dalam ringkasan">${record.groups
+  return `<div class="breadcrumb">${link("/tersimpan?view=ringkasan", "Ringkasan tersimpan")}<span>/</span>Ringkasan pilihan</div><div class="page-heading buyer-snapshot-heading"><h1>${outcome === "device-persistent" ? "Ringkasan tersimpan di perangkat ini." : "Ringkasan tersedia selama sesi ini."}</h1><p>Disimpan ${esc(buyerDate(record.savedAt))}. Isi mengikuti pilihan saat disimpan.</p></div>${recordsNotice()}${undoNotice()}<div class="cart-layout buyer-cart-layout buyer-snapshot-layout"><section aria-label="Barang dalam ringkasan">${record.groups
     .map(
       (group) =>
         `<article class="seller-cart"><h2>${icon("bag")}${esc(group.sellerName)}<small>${group.ids.length} barang</small></h2>${group.ids

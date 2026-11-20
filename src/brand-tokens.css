@@ -1,19 +1,59 @@
+/* LihatDulu design tokens.
+   White is the page and card canvas; neutral grays carry media wells, borders
+   and quiet panels; green carries actions, selected states and quiet
+   highlights. Green #176044 is the tested marketplace accent (about 7.5:1 on
+   white). Focus stays blue so it reads apart from selected green controls.
+   Camera and 3D stages keep their own dark tokens. */
 :root {
-  --ld-ink: #181d17;
-  --ld-ink-soft: #414845;
-  --ld-bone: #f6fbf1;
+  /* Green */
+  --ld-green: #176044;
+  --ld-green-deep: #104832;
+  --ld-green-soft: #eaf4ee;
+  --ld-green-tint: #f4f9f6;
+  --ld-green-line: #cfe3d7;
+
+  /* Neutrals */
+  --ld-white: #fff;
   --ld-paper: #fff;
-  --ld-moss: #00291d;
-  --ld-moss-deep: #173f32;
-  --ld-catalogue-yellow: #e3edb4;
-  --ld-sand: #e8dfd1;
-  --ld-clay: #88502f;
-  --ld-capture: #293b34;
-  --ld-line: #dce4d9;
-  --ld-success: #245941;
-  --ld-warning: #88502f;
-  --ld-danger: #923d34;
-  --ld-focus: #426bdf;
+  --ld-canvas: #fff;
+  --ld-surface: #f6f7f5;
+  --ld-surface-strong: #ecede9;
+  --ld-ink: #1b2420;
+  --ld-ink-soft: #4d5751;
+  --ld-ink-muted: #68716b;
+  --ld-line: #e2e7e2;
+  --ld-line-strong: #cbd4cf;
+
+  /* Status. Kept distinguishable from the green action colour. */
+  --ld-success: #1f6b4f;
+  --ld-success-soft: #eaf4ee;
+  --ld-warning: #8a5a12;
+  --ld-warning-soft: #fbf2e2;
+  --ld-danger: #a8322a;
+  --ld-danger-soft: #fbecea;
+  --ld-focus: #2f5bd0;
+
+  /* Dark stages: camera, prepared Sora playback and the 3D viewer. */
+  --ld-stage: #20261f;
+  --ld-stage-soft: #2b332c;
+  --ld-stage-line: #46524a;
+  --ld-stage-ink: #f2f5f1;
+  --ld-capture: #1f2a25;
+
+  /* Type */
+  --ld-body-font: Jakarta, "Plus Jakarta Sans", sans-serif;
+  --ld-display-font: var(--ld-body-font);
+  --ld-text-xs: 11px;
+  --ld-text-sm: 12px;
+  --ld-text-md: 14px;
+  --ld-text-lg: 16px;
+  --ld-text-xl: 19px;
+  --ld-display: clamp(28px, 3.2vw, 40px);
+  --ld-heading: clamp(20px, 2.1vw, 26px);
+  --ld-subheading: 17px;
+  --ld-letter-tight: -0.02em;
+
+  /* Spacing */
   --ld-space-1: 4px;
   --ld-space-2: 8px;
   --ld-space-3: 12px;
@@ -22,30 +62,45 @@
   --ld-space-6: 32px;
   --ld-space-7: 48px;
   --ld-space-8: 64px;
-  --ld-radius-sm: 6px;
+
+  /* Shape and depth */
+  --ld-radius-xs: 6px;
+  --ld-radius-sm: 8px;
   --ld-radius-md: 12px;
-  --ld-radius-lg: 20px;
+  --ld-radius-lg: 16px;
   --ld-radius-pill: 999px;
-  --ld-shadow-soft: 0 4px 16px #00291d08;
-  --ld-shadow-float: 0 18px 44px #00291d20;
-  --ld-scroll-thumb: #8eaa9a;
-  --ld-scroll-track: #edf2e8;
-  --ld-scroll-hover: #587a68;
-  --ld-scroll-active: #00291d;
-  --ld-body-font: Jakarta, "Plus Jakarta Sans", sans-serif;
-  --ld-display-font: var(--ld-body-font);
+  --ld-shadow-soft: 0 1px 2px #1b24200a, 0 6px 20px #1b24200a;
+  --ld-shadow-float: 0 14px 38px #1b24201f;
+  --ld-focus-ring: 0 0 0 3px var(--ld-green-soft);
+
+  /* Scrollbars */
+  --ld-scroll-thumb: #b9c6bf;
+  --ld-scroll-track: #f1f3f0;
+  --ld-scroll-hover: #8fa198;
+  --ld-scroll-active: var(--ld-green);
+
+  /* Legacy aliases used across route stylesheets. */
   --ink: var(--ld-ink);
   --muted: var(--ld-ink-soft);
-  --canvas: var(--ld-bone);
+  --canvas: var(--ld-canvas);
   --paper: var(--ld-paper);
-  --soft: #edf2e8;
-  --forest: var(--ld-moss);
-  --forest-hover: var(--ld-moss-deep);
+  --soft: var(--ld-green-soft);
+  --forest: var(--ld-green);
+  --forest-hover: var(--ld-green-deep);
   --line: var(--ld-line);
-  --accent: var(--ld-clay);
-  --media: #eef1e7;
+  --accent: var(--ld-green);
+  --media: var(--ld-surface);
   --danger: var(--ld-danger);
-  --radius: 12px;
+  --warning: var(--ld-warning);
+  --radius: var(--ld-radius-md);
+  /* Historical names kept for older rules. */
+  --ld-bone: var(--ld-canvas);
+  --ld-moss: var(--ld-green-deep);
+  --ld-moss-deep: var(--ld-green-deep);
+  --ld-catalogue-yellow: var(--ld-green-soft);
+  --ld-sand: #ece6dc;
+  --ld-clay: var(--ld-warning);
+  --ld-capture: #1f2a25;
 }
 @media (prefers-reduced-motion: reduce) {
   *,

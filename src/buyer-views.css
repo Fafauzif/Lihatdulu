@@ -56,9 +56,9 @@
 .buyer-offer-status {
   display: grid;
   gap: 8px;
-  background: var(--soft);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  background: var(--ld-green-tint);
+  border: 1px solid var(--ld-green-line);
+  border-radius: var(--ld-radius-md);
   padding: 18px;
   margin: 18px 0;
 }
@@ -100,10 +100,9 @@
   font-size: 13px;
   line-height: 1.7;
   border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
-  background: var(--soft);
+  background: var(--ld-surface);
   padding: 14px 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   margin: 12px 0;
   overflow-wrap: anywhere;
 }
@@ -225,36 +224,47 @@
 }
 .buyer-workspace-tabs {
   display: flex;
-  gap: 5px;
-  border-bottom: 1px solid var(--line);
-  margin: 0 0 28px;
+  gap: 8px;
+  margin: 0 0 26px;
   flex-wrap: wrap;
 }
 .buyer-workspace-tabs a {
   display: flex;
   gap: 8px;
   align-items: center;
-  min-height: 48px;
-  padding: 12px 17px;
+  min-height: 44px;
+  padding: 8px 15px;
   font-size: 13px;
-  border-bottom: 3px solid transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: var(--ld-ink-soft);
   cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 .buyer-workspace-tabs a:hover {
-  background: var(--soft);
+  background: var(--ld-surface);
+  border-color: var(--line-strong);
+  color: var(--ld-ink);
 }
 .buyer-workspace-tabs a.selected {
-  border-bottom-color: var(--forest);
+  background: var(--ld-green-soft);
+  border-color: var(--ld-green-line);
+  color: var(--ld-green-deep);
   font-weight: 600;
-  color: var(--forest);
 }
 .buyer-workspace-tabs a span {
   font-size: 11px;
   min-width: 22px;
   text-align: center;
-  background: var(--soft);
-  padding: 2px 5px;
+  background: var(--ld-surface);
+  color: var(--ld-ink-soft);
+  padding: 2px 6px;
   border-radius: 20px;
+}
+.buyer-workspace-tabs a.selected span {
+  background: white;
+  color: var(--ld-green-deep);
 }
 .buyer-workspace-intro {
   font-size: 13px;
@@ -336,9 +346,9 @@
   align-items: center;
   gap: 14px;
   padding: 8px 16px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
+  border: 1px solid var(--ld-green-line);
+  border-radius: 10px;
+  background: var(--ld-green-tint);
   margin: 12px 0 20px;
   font-size: 13px;
 }
@@ -444,9 +454,9 @@
   display: flex;
   height: 140px;
   gap: 8px;
-  background: var(--soft);
+  background: var(--ld-surface);
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   align-items: center;
 }
 .buyer-collection-images img {
@@ -465,9 +475,9 @@
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 25px;
-  background: var(--soft);
+  background: var(--ld-surface);
   padding: 20px;
-  border-radius: var(--radius);
+  border-radius: var(--ld-radius-md);
 }
 .buyer-collection-members label {
   font-size: 13px;
