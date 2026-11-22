@@ -1,4 +1,11 @@
-# Scan toolchain — recorded on the Helios
+# Scan toolchain — historical record (local pipeline retired)
+
+> **Historical.** This page records the FFmpeg → COLMAP → Brush study run on the
+> Helios in November 2026. The active scan feature no longer uses those tools,
+> CUDA, FFmpeg or a local GPU worker. It now calls KIRI Engine from the server;
+> see [kiri-scan.md](kiri-scan.md). Keep this page for provenance and evidence,
+> not as setup instructions.
+
 
 **Date** 20 November 2026 · **Machine** Acer Predator PHN16-71 · Windows 11 Home Single Language · NVIDIA GeForce RTX 4060 Laptop GPU, 8 188 MiB, driver 581.80 · Node 24.19.0.
 

@@ -1,0 +1,516 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import { createServer } from "node:net";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium } from "@playwright/test";
+import { testBrowserPath } from "./test-browser.js";
+
+// Mock-mode browser proof for the KIRI scan prototype. It runs the real server,
+// the real ZIP/PLY/SPZ validation and the real splat-transform conversion; only
+// the KIRI network calls are simulated. No credits, no external requests.
+
+const root = fileURLToPath(new URL("../", import.meta.url));
+const runDir = path.join(root, "var", "kiri-qa");
+const jobsRoot = path.join(runDir, "jobs");
+const clip = path.join(root, "public", "videos", "sora-walkthrough.mp4");
+const distDir = path.join(root, "dist");
+
+const report = {
+  started: new Date().toISOString(),
+  mode: "mock",
+  checks: [],
+  screenshots: [],
+  pageErrors: [],
+  consoleErrors: [],
+  failedResponses: [],
+  externalRequests: [],
+  mediaCalls: [],
+  serverLogs: [],
+};
+
+await fs.rm(runDir, { recursive: true, force: true });
+await fs.mkdir(runDir, { recursive: true });
+// A byte-different copy of the same clip, so the failure/retry phase is not
+// deduplicated into the successful job from the first phase.
+const variantClip = path.join(runDir, "sora-walkthrough-variant.mp4");
+await fs.copyFile(clip, variantClip);
+await fs.appendFile(variantClip, Buffer.from("\nLihatDulu mock failure variant\n"));
+for (const file of ["index.html"]) {
+  await fs.access(path.join(distDir, file)).catch(() => {
+    throw new Error("dist is missing. Run npm run build before this check.");
+  });
+}
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+const port = Number(process.env.KIRI_QA_PORT || 0) || (await freePort());
+const base = `http://127.0.0.1:${port}`;
+
+let serverProcess = null;
+let serverLog = "";
+
+function spawnServer({ fail = "" } = {}) {
+  const child = spawn(process.execPath, [path.join(root, "server", "kiri-server.mjs")], {
+    cwd: root,
+    env: {
+      ...process.env,
+      KIRI_MOCK: "1",
+      KIRI_API_KEY: "",
+      KIRI_JOBS_ROOT: jobsRoot,
+      KIRI_PORT: String(port),
+      KIRI_SERVE_DIST: "1",
+      KIRI_DIST_DIR: distDir,
+      KIRI_MOCK_LATENCY_MS: "1200",
+      KIRI_POLL_MIN_MS: "250",
+      KIRI_POLL_MAX_MS: "900",
+      KIRI_MOCK_FAIL: fail,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  child.stdout.on("data", (chunk) => {
+    serverLog += chunk.toString("utf8");
+  });
+  child.stderr.on("data", (chunk) => {
+    serverLog += chunk.toString("utf8");
+  });
+  return child;
+}
+
+async function waitForServer() {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${base}/api/kiri/config`);
+      if (response.ok) return response.json();
+    } catch {
+      // server still starting
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`scan server did not start:\n${serverLog}`);
+}
+
+async function startServer(options) {
+  serverProcess = spawnServer(options);
+  const config = await waitForServer();
+  report.serverLogs.push({ event: "start", fail: options?.fail ?? "", mode: config.mode });
+  return config;
+}
+
+async function stopServer() {
+  if (!serverProcess) return;
+  const child = serverProcess;
+  serverProcess = null;
+  child.kill();
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 4000);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+async function jobCount() {
+  const entries = await fs.readdir(path.join(jobsRoot, "jobs")).catch(() => []);
+  return entries.length;
+}
+
+const browser = await chromium.launch({
+  executablePath: await testBrowserPath(),
+  headless: true,
+  args: [
+    "--no-sandbox",
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader",
+    "--disable-dev-shm-usage",
+  ],
+});
+
+await startServer();
+
+async function newPage(options = {}) {
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    ...options,
+  });
+  await context.addInitScript(() => {
+    window.__kiriMediaCalls = 0;
+    if (navigator.mediaDevices)
+      for (const method of ["getUserMedia", "getDisplayMedia"])
+        navigator.mediaDevices[method] = async () => {
+          window.__kiriMediaCalls += 1;
+          throw new Error("upload-only prototype must not open a camera");
+        };
+  });
+  const page = await context.newPage();
+  page.setDefaultTimeout(20_000);
+  page.on("pageerror", (error) =>
+    report.pageErrors.push({ url: page.url(), message: error.message }),
+  );
+  page.on("console", (message) => {
+    if (message.type() === "error")
+      report.consoleErrors.push({ url: page.url(), message: message.text() });
+  });
+  page.on("response", (response) => {
+    if (response.status() < 400) return;
+    // The unknown-id check deliberately asks for a job that does not exist.
+    if (response.url().includes("/api/kiri/jobs/00000000-0000-4000-8000-000000000000")) return;
+    report.failedResponses.push({ url: response.url(), status: response.status() });
+  });
+  page.on("request", (request) => {
+    const url = request.url();
+    if (!url.startsWith(base) && !/^(?:data|blob):/.test(url))
+      report.externalRequests.push(url);
+  });
+  return { context, page };
+}
+
+async function check(name, run) {
+  try {
+    const evidence = await run();
+    report.checks.push({ name, pass: true, evidence });
+    console.log("PASS", name);
+  } catch (error) {
+    report.checks.push({ name, pass: false, error: error.stack || error.message });
+    console.error("FAIL", name, error.message);
+  }
+  await fs.writeFile(path.join(runDir, "report.json"), JSON.stringify(report, null, 2));
+}
+
+async function open(page, route) {
+  await page.goto(base + route, { waitUntil: "networkidle" });
+  await page.locator("#main").waitFor();
+}
+
+async function shot(page, name, options = {}) {
+  const file = path.join(runDir, `${name}.png`);
+  await page.screenshot({ path: file, ...options });
+  report.screenshots.push(file);
+  return file;
+}
+
+async function pickClip(page, file = clip) {
+  await page.locator("[data-scan-input]").setInputFiles(file);
+  await page.locator("[data-scan-media]:not([hidden]) video").waitFor();
+  await page
+    .locator("[data-scan-facts]")
+    .filter({ hasText: path.basename(file) })
+    .waitFor();
+}
+
+async function submitClip(page) {
+  await page.locator("[data-scan-consent]").check();
+  await page.locator("[data-scan-submit]").click();
+  await page.locator("[data-scan-job]:not([hidden])").waitFor();
+}
+
+async function waitForJobEnd(page, timeout = 90_000) {
+  const deadline = Date.now() + timeout;
+  const seen = new Set();
+  while (Date.now() < deadline) {
+    const state = await page.evaluate(() => {
+      const active = document.querySelector("[data-scan-stage].is-active");
+      const badge = document.querySelector("[data-scan-job-badge]");
+      const error = document.querySelector("[data-scan-job-error]");
+      return {
+        stage: active?.textContent?.trim() ?? null,
+        badge: badge?.textContent?.trim() ?? null,
+        error: error && !error.hidden ? error.textContent.trim() : null,
+      };
+    });
+    if (state.stage) seen.add(state.stage);
+    if (state.badge === "Siap dilihat") return { ...state, seen: [...seen] };
+    if (state.error) return { ...state, seen: [...seen] };
+    await page.waitForTimeout(150);
+  }
+  throw new Error(`job did not settle; stages seen: ${[...seen].join(", ")}`);
+}
+
+async function waitForViewer(page) {
+  await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(350);
+}
+
+async function orbitProof(page, name) {
+  const viewer = page.locator("[data-scan-viewer]");
+  const box = await viewer.boundingBox();
+  assert.ok(box && box.width > 200 && box.height > 150, "viewer has a usable box");
+  const before = await page.screenshot({ clip: box });
+  await page.mouse.move(box.x + box.width * 0.32, box.y + box.height * 0.58);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.72, box.y + box.height * 0.42, { steps: 14 });
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  const after = await page.screenshot({ clip: box });
+  assert.ok(!before.equals(after), "dragging must rotate the splat");
+  await fs.writeFile(path.join(runDir, `${name}-before.png`), before);
+  await fs.writeFile(path.join(runDir, `${name}-after.png`), after);
+  return { width: Math.round(box.width), height: Math.round(box.height) };
+}
+
+async function layoutFacts(page) {
+  return page.evaluate(() => {
+    const visible = (element) => {
+      const box = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return box.width > 0 && box.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    };
+    const clipped = [...document.querySelectorAll("#main a,#main button,#main input")]
+      .filter(visible)
+      .map((element) => ({
+        label: element.getAttribute("data-scan-submit") !== null ? "submit" : element.textContent.trim().slice(0, 40),
+        box: element.getBoundingClientRect().toJSON(),
+      }))
+      .filter((item) => item.box.left < -1 || item.box.right > innerWidth + 1);
+    const small = [...document.querySelectorAll("[data-scan-choose],[data-scan-submit],[data-scan-open]")]
+      .filter(visible)
+      .map((element) => ({
+        label: element.textContent.trim().slice(0, 30) || "consent",
+        height: Math.round(element.getBoundingClientRect().height),
+      }))
+      .filter((item) => item.height < 40);
+    const consentLabel = document.querySelector("[data-scan-consent]")?.closest("label");
+    const consentHeight = consentLabel ? Math.round(consentLabel.getBoundingClientRect().height) : 0;
+    return {
+      width: innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      clipped,
+      small,
+      consentHeight,
+      mediaCalls: window.__kiriMediaCalls ?? 0,
+    };
+  });
+}
+
+// 1. Upload page, copy and consent gate.
+{
+  const { context, page } = await newPage();
+  await check("upload page explains KIRI and gates the send behind consent", async () => {
+    await open(page, "/jual/pindai");
+    await page.locator("[data-scan-upload]").waitFor();
+    const heading = await page.locator("[data-scan-upload] h1").textContent();
+    assert.match(heading, /Ubah video barangmu/);
+    const mode = await page.locator("[data-scan-mode]").textContent();
+    assert.match(mode, /Mode simulasi/);
+    assert.match(mode, /tidak ada kredit/);
+    assert.equal(await page.locator("[data-scan-submit]").isDisabled(), true);
+    assert.equal(await page.locator("[data-scan-consent]").isChecked(), false);
+    await shot(page, "01-upload-empty");
+    return { heading: heading.trim(), mode: mode.trim() };
+  });
+
+  await check("a chosen MP4 is previewed before anything is sent", async () => {
+    await pickClip(page);
+    const facts = await page.locator("[data-scan-facts]").textContent();
+    assert.match(facts, /sora-walkthrough\.mp4/);
+    assert.match(facts, /\d+ dtk/);
+    const video = page.locator("[data-scan-media] video");
+    assert.ok((await video.getAttribute("src")).startsWith("blob:"));
+    assert.equal(await page.locator("[data-scan-submit]").isDisabled(), true);
+    await shot(page, "02-upload-preview");
+    return { facts: facts.trim() };
+  });
+
+  await check("one confirm sends one job and reports queued/processing stages", async () => {
+    await submitClip(page);
+    const result = await waitForJobEnd(page);
+    assert.equal(result.error, null);
+    assert.ok(result.seen.length >= 2, `expected several stages, saw ${result.seen}`);
+    assert.equal(await jobCount(), 1);
+    await shot(page, "03-upload-ready");
+    return { stages: result.seen, jobs: await jobCount() };
+  });
+
+  await check("the finished job opens the existing SPZ viewer", async () => {
+    await page.locator("[data-scan-open]").click();
+    await page.waitForURL(/\/pindai\/[0-9a-f-]{36}$/);
+    await waitForViewer(page);
+    const splats = await page.locator("[data-scan-viewer]").getAttribute("data-splats");
+    assert.equal(Number(splats), 21600);
+    const details = await page.locator("[data-scan-details]").textContent();
+    assert.match(details, /Jumlah splat/);
+    assert.match(details, /21\.600/);
+    assert.match(details, /Mode simulasi/);
+    await shot(page, "04-result-ready");
+    return { splats: Number(splats), url: page.url() };
+  });
+
+  await check("dragging the result rotates the splat", async () => {
+    const result = await orbitProof(page, "05-result-orbit");
+    return result;
+  });
+
+  await check("a reload resumes the same job without a second upload", async () => {
+    const before = await jobCount();
+    await page.reload({ waitUntil: "networkidle" });
+    await waitForViewer(page);
+    assert.equal(await jobCount(), before);
+    assert.match(page.url(), /\/pindai\/[0-9a-f-]{36}$/);
+    return { jobs: before };
+  });
+
+  await check("the upload page restores the stored job after reload", async () => {
+    await open(page, "/jual/pindai");
+    await page.locator("[data-scan-job]:not([hidden])").waitFor();
+    const badge = await page.locator("[data-scan-job-badge]").textContent();
+    assert.equal(badge.trim(), "Siap dilihat");
+    assert.equal(await page.locator("[data-scan-picker]").isVisible(), false);
+    assert.equal(await page.locator("[data-scan-open]").isVisible(), true);
+    return { badge: badge.trim() };
+  });
+
+  await check("the upload-only prototype never asks for a camera", async () => {
+    const calls = await page.evaluate(() => window.__kiriMediaCalls ?? 0);
+    assert.equal(calls, 0);
+    return { mediaCalls: calls };
+  });
+
+  await context.close();
+}
+
+// 2. Failure, then retry after the server recovers.
+{
+  const baseJobs = await jobCount();
+  await stopServer();
+  await startServer({ fail: "submit" });
+  const { context, page } = await newPage();
+  await check("a failed submission is explained and offers an explicit resend", async () => {
+    await open(page, "/jual/pindai");
+    await pickClip(page, variantClip);
+    await submitClip(page);
+    const state = await waitForJobEnd(page);
+    assert.ok(state.error, "failure copy is visible");
+    assert.match(state.error, /tidak bisa dihubungi/);
+    assert.equal(await page.locator("[data-scan-resend]").isVisible(), true);
+    assert.equal(await jobCount(), baseJobs + 1);
+    await shot(page, "06-upload-failed");
+    return { error: state.error, jobs: baseJobs + 1 };
+  });
+
+  await check("resend after recovery finishes without duplicating the failed job", async () => {
+    await stopServer();
+    await startServer();
+    await page.locator("[data-scan-resend]").click();
+    const state = await waitForJobEnd(page);
+    assert.equal(state.error, null);
+    assert.equal(await jobCount(), baseJobs + 2);
+    await shot(page, "07-upload-retried");
+    return { stages: state.seen, jobs: baseJobs + 2 };
+  });
+  await context.close();
+}
+
+// 3. Mobile layout and touch orbit.
+{
+  const { context, page } = await newPage({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 2,
+  });
+  await check("the mobile upload page fits 390px and keeps tap targets usable", async () => {
+    await open(page, "/jual/pindai");
+    await pickClip(page);
+    const facts = await layoutFacts(page);
+    assert.ok(facts.scrollWidth <= facts.width + 1, `overflow ${facts.scrollWidth} > ${facts.width}`);
+    assert.deepEqual(facts.clipped, []);
+    assert.deepEqual(facts.small, []);
+    assert.ok(facts.consentHeight >= 40, `consent label is ${facts.consentHeight}px tall`);
+    await shot(page, "08-mobile-upload", { fullPage: true });
+    return facts;
+  });
+
+  await check("the mobile flow reaches a ready, orbitable result", async () => {
+    await submitClip(page);
+    const state = await waitForJobEnd(page);
+    assert.equal(state.error, null);
+    await page.locator("[data-scan-open]").click();
+    await waitForViewer(page);
+    const facts = await layoutFacts(page);
+    assert.ok(facts.scrollWidth <= facts.width + 1);
+    await orbitProof(page, "09-mobile-orbit");
+    await shot(page, "10-mobile-result");
+    return { stages: state.seen, width: facts.width };
+  });
+  await context.close();
+}
+
+// 4. The rest of the site is untouched.
+{
+  const { context, page } = await newPage();
+  await check("the marketplace, catalogue and authored 3D still render", async () => {
+    await open(page, "/");
+    const homeCards = await page.locator(".product-grid a").count();
+    assert.ok(homeCards >= 4);
+    await open(page, "/beli");
+    const listings = await page.locator("[data-listing]").count();
+    assert.ok(listings >= 10, `catalogue shows ${listings} listings`);
+    await open(page, "/barang/sora?tab=model");
+    await page.locator(".inspection").waitFor();
+    assert.ok((await page.locator(".inspection").textContent()).length > 20);
+    return { homeCards, listings };
+  });
+
+  await check("the prepared Sora walkthrough and its routes still work", async () => {
+    await open(page, "/jual");
+    const entry = page.locator(".vj-scan-entry");
+    assert.match(await entry.textContent(), /KIRI Engine/);
+    assert.match(await entry.textContent(), /Pindai dari video/);
+    assert.equal(await page.locator('a[href="/jual/sora/rekam"]').count() > 0, true);
+    await open(page, "/jual/sora/rekam");
+    await page.locator(".video-journey").waitFor();
+    assert.ok((await page.locator("[data-video-player]").count()) >= 1);
+    assert.ok((await page.locator("video").count()) >= 1);
+    await shot(page, "11-sora-route");
+    return { scanEntry: true, sora: true };
+  });
+
+  await check("an unknown scan id shows the not-found state", async () => {
+    await open(page, "/pindai/00000000-0000-4000-8000-000000000000");
+    const text = await page.locator("[data-scan-title]").textContent();
+    assert.match(text, /tidak ditemukan/i);
+    return { title: text.trim() };
+  });
+
+  await check("no page errors, failed app responses or external requests", async () => {
+    assert.deepEqual(report.pageErrors, []);
+    assert.deepEqual(report.failedResponses, []);
+    assert.deepEqual(report.externalRequests, []);
+    return {
+      pageErrors: report.pageErrors.length,
+      failedResponses: report.failedResponses.length,
+      externalRequests: report.externalRequests.length,
+      consoleErrors: report.consoleErrors.length,
+    };
+  });
+  await context.close();
+}
+
+await browser.close();
+await stopServer();
+report.finished = new Date().toISOString();
+report.serverLogTail = serverLog.slice(-4000);
+await fs.writeFile(path.join(runDir, "report.json"), JSON.stringify(report, null, 2));
+
+const failed = report.checks.filter((entry) => !entry.pass);
+console.log(
+  `\n${report.checks.length - failed.length}/${report.checks.length} checks passed · screenshots in ${path.relative(root, runDir)}`,
+);
+if (failed.length) {
+  for (const entry of failed) console.error("FAILED:", entry.name);
+  process.exitCode = 1;
+}

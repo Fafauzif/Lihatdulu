@@ -1,3 +1,16 @@
+/* Viewer-only styles. The scan result page embeds this module, so the canvas,
+   placeholder and hint live together with the Three.js mount. */
+
+.scan-viewer {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--ld-radius-lg);
+  background: var(--ld-stage);
+  box-shadow: var(--ld-shadow-soft);
+  touch-action: none;
+}
+
 .scan-viewer-canvas {
   position: absolute;
   inset: 0;
@@ -10,6 +23,24 @@
 
 .scan-viewer-canvas:active {
   cursor: grabbing;
+}
+
+.scan-viewer-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  margin: 0;
+  padding: 24px;
+  color: var(--ld-stage-ink);
+  background: #1b2420b3;
+  font-size: var(--ld-text-md);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.scan-viewer-placeholder[data-tone="error"] {
+  color: #ffd8d3;
 }
 
 .scan-viewer-hint {

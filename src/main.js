@@ -450,7 +450,7 @@ function setPageMetadata(path) {
     "/tentang": "Panduan kondisi & ukuran",
     "/cari-dari-foto": "Demo pencarian dari foto",
     "/jual": "Ruang penjual Sora",
-    "/jual/pindai": "Pindai furnitur",
+    "/jual/pindai": "Pindai furnitur dengan KIRI Engine",
     "/jual/sora/rekam": "Video bukti Sora",
     "/jual/sora/tinjau": "Tinjau bukti Sora",
   };
@@ -477,7 +477,7 @@ function render() {
   const path = location.pathname.replace(/\/$/, "") || "/";
   document.body.classList.toggle("on-marketplace", path === "/beli");
   document.body.classList.toggle("capture-page", path === "/jual/sora/rekam");
-  document.body.classList.toggle("scan-capture-page", path === "/jual/pindai");
+  document.body.classList.toggle("scan-upload-page", path === "/jual/pindai");
   document.body.classList.toggle("scan-page", path.startsWith("/pindai/"));
   document.body.classList.toggle("on-product", path.startsWith("/barang/"));
   document.body.classList.toggle(
@@ -500,21 +500,27 @@ function render() {
   else if (path.startsWith("/toko/"))
     app.innerHTML = storePage(path.split("/")[2]);
   else if (path === "/jual/pindai") {
-    app.innerHTML = `<main id="main" tabindex="-1"><p class="scan-loading" role="status">Menyiapkan kamera…</p></main>`;
+    app.innerHTML = shell(
+      `<section class="scan-upload"><p class="scan-loading" role="status">Menyiapkan halaman pindai…</p></section>`,
+      "scan-page",
+    );
     let cancelled = false;
     let cleanup = () => {};
-    import("./scan-capture.js")
+    import("./scan-upload.js")
       .then((module) => {
         if (cancelled) return;
-        app.innerHTML = `<main id="main" tabindex="-1">${module.renderScanCapture()}</main>`;
-        cleanup = module.mountScanCapture(app, {
+        app.innerHTML = shell(module.renderScanUpload(), "scan-page");
+        cleanup = module.mountScanUpload(app, {
           onNavigate: navigate,
           onToast: toast,
         });
       })
       .catch(() => {
         if (!cancelled)
-          app.innerHTML = `<main id="main" tabindex="-1"><p class="scan-loading" role="alert">Kamera belum bisa dimuat. <a href="/jual" data-nav>Kembali ke ruang penjual</a></p></main>`;
+          app.innerHTML = shell(
+            `<section class="scan-upload"><h1>Halaman pindai belum bisa dimuat.</h1><p><a href="/jual" data-nav>Kembali ke ruang penjual</a></p></section>`,
+            "scan-page",
+          );
       });
     dispose = () => {
       cancelled = true;
@@ -541,7 +547,7 @@ function render() {
       .catch(() => {
         if (!cancelled)
           app.innerHTML = shell(
-            `<section class="scan-preview"><h1>Hasil pindai belum bisa dimuat.</h1><p><a href="/jual/pindai" data-nav>Rekam barang lain</a></p></section>`,
+            `<section class="scan-preview"><h1>Hasil pindai belum bisa dimuat.</h1><p><a href="/jual/pindai" data-nav>Pindai barang lain</a></p></section>`,
             "scan-page",
           );
       });

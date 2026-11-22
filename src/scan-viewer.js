@@ -80,7 +80,7 @@ export function mountScanViewer(root, { url, poster, onStatus = () => {} } = {})
     host.dataset.state = "error";
     if (placeholder) {
       placeholder.textContent =
-        "Pratinjau 3D belum bisa dibuka di perangkat ini. Bingkai rekaman tetap tersedia.";
+        "Pratinjau 3D belum bisa dibuka di perangkat ini. Coba muat ulang halaman.";
       placeholder.dataset.tone = "error";
       placeholder.hidden = false;
     }
@@ -121,7 +121,6 @@ export function mountScanViewer(root, { url, poster, onStatus = () => {} } = {})
         }
       },
     });
-    splat.quaternion.set(1, 0, 0, 0);
     scene.add(splat);
     controls = new SparkControls({ canvas });
     observer = new ResizeObserver(resize);
@@ -141,7 +140,10 @@ export function mountScanViewer(root, { url, poster, onStatus = () => {} } = {})
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         fitRadius = Math.max(size.length() / 2, 0.02);
-        splat.position.set(-center.x, -center.y, -center.z);
+        // KIRI exports the splats in the same orientation as the source model.
+        // Centre the box in world space so a future mesh rotation stays framed.
+        const offset = center.clone().applyQuaternion(splat.quaternion);
+        splat.position.copy(offset).multiplyScalar(-1);
         resize();
         host.dataset.state = "ready";
         host.dataset.splats = String(splat.numSplats ?? 0);

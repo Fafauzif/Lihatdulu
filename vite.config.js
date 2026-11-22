@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
 
-// The scan API runs as a separate local process (`npm run scan:api`). In dev,
-// Vite serves the app and proxies /api so the browser keeps one origin.
+// The KIRI scan API runs as a separate local process (`npm run scan:serve`,
+// or `npm run scan:mock` for the labelled simulation). In dev, Vite serves the
+// app and proxies /api so the browser keeps one origin.
 export default defineConfig({
   server: {
     host: "127.0.0.1",
