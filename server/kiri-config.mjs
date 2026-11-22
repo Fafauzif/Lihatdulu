@@ -26,6 +26,9 @@ export const DEFAULTS = Object.freeze({
   // the upload gets its own budget instead of the short control-call timeout.
   uploadTimeoutMs: 15 * 60 * 1000,
   isMask: 1,
+  inputMode: "video",
+  frameFps: 4,
+  photoCount: 120,
   requestTimeoutMs: 2 * 60 * 1000,
   downloadTimeoutMs: 20 * 60 * 1000,
   port: 8787,
@@ -119,6 +122,17 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
       DEFAULTS.uploadTimeoutMs,
     ),
     isMask: env.KIRI_ISMASK === "0" ? 0 : 1,
+    input: {
+      // "photo" samples the clip into stills and submits them to KIRI's 3DGS
+      // photo endpoint; "video" sends the clip itself. The default stays video
+      // until the photo profile clears the visual gate.
+      mode:
+        String(env.KIRI_INPUT || DEFAULTS.inputMode).trim().toLowerCase() === "photo"
+          ? "photo"
+          : "video",
+      fps: positive(env.KIRI_FRAME_FPS, DEFAULTS.frameFps),
+      photos: positive(env.KIRI_PHOTO_COUNT, DEFAULTS.photoCount),
+    },
     requestTimeoutMs: positive(
       env.KIRI_REQUEST_TIMEOUT_MS,
       DEFAULTS.requestTimeoutMs,

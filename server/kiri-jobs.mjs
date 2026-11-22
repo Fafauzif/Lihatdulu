@@ -192,6 +192,8 @@ export function toJobDto(job, { mock = false, now = Date.now(), ttlMs = 0 } = {}
       filename: job.source?.filename ?? null,
       bytes: job.source?.bytes ?? 0,
     },
+    // How the model was built: the clip itself or stills sampled from it.
+    input: job.input ?? null,
     kiri: {
       serial: job.kiri?.serial ?? null,
       status: job.kiri?.status ?? null,

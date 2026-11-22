@@ -1,4 +1,5 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   convertPlyToSpz as defaultConvert,
   validateSplatPly as defaultValidatePly,
@@ -6,6 +7,7 @@ import {
 } from "./kiri-artifact.mjs";
 import { extractSplat as defaultExtract } from "./zip.mjs";
 import { stripBackdrop as defaultStripBackdrop } from "./kiri-cleanup.mjs";
+import { createFrameExtractor } from "./kiri-frames.mjs";
 import { KiriError, toKiriError } from "./kiri-errors.mjs";
 import {
   findReusableByHash,
@@ -47,6 +49,7 @@ export function createKiriService({
   validatePly = defaultValidatePly,
   validateSpz = defaultValidateSpz,
   readFileImpl = readFile,
+  frames = createFrameExtractor(),
   log = () => {},
 } = {}) {
   const jobsRoot = config.jobsRoot;
@@ -306,14 +309,39 @@ export function createKiriService({
     });
 
     const submitStarted = now();
+    const jobDir = jobPaths(jobsRoot, job.id).dir;
+    // KIRI's 3DGS photo endpoint reconstructs one object from stills. A video
+    // orbit of a chair reconstructs the room around it, so when the profile
+    // asks for it the clip is sampled first and the stills are sent instead.
+    const photoMode =
+      config.input?.mode === "photo" && typeof client.submitImages === "function";
+    const framesDir = join(jobDir, "frames");
+    let stills = null;
+    let input = { mode: "video" };
+    if (photoMode) {
+      try {
+        stills = await frames.extract({
+          videoPath: tempPath,
+          directory: framesDir,
+          fps: config.input.fps,
+          count: config.input.photos,
+        });
+        input = { mode: "photo", photos: stills.length };
+      } catch (error) {
+        // A missing ffmpeg or a clip too short for 20 stills is not a dead end:
+        // the video upload is still a valid KIRI job.
+        const kiriError = toKiriError(error, "kiri_unavailable");
+        input = { mode: "video", fallback: kiriError.code, reason: kiriError.detail ?? null };
+        logEvent("job_photo_fallback", { id: job.id, code: kiriError.code });
+      }
+    }
     try {
-      const result = await client.submitVideo({
-        filePath: tempPath,
-        filename,
-        jobDir: jobPaths(jobsRoot, job.id).dir,
-      });
+      const result = stills
+        ? await client.submitImages({ files: stills, mask: config.isMask })
+        : await client.submitVideo({ filePath: tempPath, filename, jobDir });
       job = await updateJob(jobsRoot, job.id, {
         stage: "queued",
+        input,
         kiri: { serial: result.serial, status: 3, statusRaw: null },
         timings: {
           ...job.timings,
@@ -321,11 +349,18 @@ export function createKiriService({
           queuedAt: new Date(now()).toISOString(),
         },
       });
-      logEvent("job_submitted", { id: job.id, mock: config.mode === "mock" });
+      logEvent("job_submitted", {
+        id: job.id,
+        mock: config.mode === "mock",
+        input: input.mode,
+        photos: input.photos ?? null,
+      });
     } catch (error) {
       await fail(job, toKiriError(error));
       job = await readJob(jobsRoot, job.id);
     } finally {
+      if (photoMode)
+        await rm(framesDir, { recursive: true, force: true }).catch(() => {});
       await rm(tempPath, { force: true }).catch(() => {});
     }
     schedule(job.id, config.poll.minMs);
