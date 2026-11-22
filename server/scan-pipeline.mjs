@@ -34,7 +34,22 @@ export const TIMEOUTS = Object.freeze({
   convert: 600_000,
 });
 
-export const FRAME_FILTER = "fps=3,scale=1280:-2";
+export const BASE_FRAME_FPS = 3;
+export const MAX_FRAME_FPS = 8;
+
+export function extractionFps(
+  durationS,
+  { minFrames = MIN_FRAMES, base = BASE_FRAME_FPS, max = MAX_FRAME_FPS } = {},
+) {
+  const seconds = Math.max(1, durationS);
+  return Math.min(max, Math.max(base, Math.ceil(minFrames / seconds)));
+}
+
+export function frameFilter(fps) {
+  return `fps=${fps},scale=1280:-2`;
+}
+
+export const FRAME_FILTER = frameFilter(BASE_FRAME_FPS);
 
 export const buildFfprobeArgs = ({ clip }) => [
   "-v",
@@ -46,14 +61,18 @@ export const buildFfprobeArgs = ({ clip }) => [
   clip,
 ];
 
-export const buildExtractArgs = ({ clip, framesDir }) => [
+export const buildExtractArgs = ({
+  clip,
+  framesDir,
+  fps = BASE_FRAME_FPS,
+}) => [
   "-hide_banner",
   "-loglevel",
   "error",
   "-i",
   clip,
   "-vf",
-  FRAME_FILTER,
+  frameFilter(fps),
   "-q:v",
   "2",
   join(framesDir, "%04d.jpg"),
@@ -317,6 +336,7 @@ export async function runRealPipeline(
       "footage_invalid",
       "Durasi rekaman perlu 7–50 detik. Rekam ulang.",
     );
+  const fps = extractionFps(mediaInfo.durationS);
   const media = {
     ...record.media,
     durationS: Number(mediaInfo.durationS.toFixed(1)),
@@ -328,7 +348,7 @@ export async function runRealPipeline(
   await mkdir(paths.frames, { recursive: true });
   const extract = await tool(
     "ffmpeg",
-    buildExtractArgs({ clip, framesDir: paths.frames }),
+    buildExtractArgs({ clip, framesDir: paths.frames, fps }),
     { timeoutMs: TIMEOUTS.ffmpeg, logPath: join(paths.logs, "ffmpeg.log") },
   );
   timings.extractMs = extract.ms;

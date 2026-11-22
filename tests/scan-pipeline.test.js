@@ -13,6 +13,8 @@ import {
   buildFfprobeArgs,
   buildMapperArgs,
   buildMatchArgs,
+  extractionFps,
+  frameFilter,
 } from "../server/scan-pipeline.mjs";
 
 test("buildExtractArgs uses the recorded filter and numbered output", () => {
@@ -119,5 +121,22 @@ test("conversion and decimation builders keep the CLI order", () => {
   assert.deepEqual(
     buildDecimateArgs({ inputPly: "D:\\scan.ply", outputPly: "D:\\small.ply" }),
     ["D:\\scan.ply", "--decimate", "2000000", "D:\\small.ply"],
+  );
+});
+
+test("short takes extract at a higher fps to reach the frame floor", () => {
+  assert.equal(extractionFps(25.35), 3);
+  assert.equal(extractionFps(20.13), 3);
+  assert.equal(extractionFps(15.0), 4);
+  assert.equal(extractionFps(14.585), 5);
+  assert.equal(extractionFps(10.03), 6);
+  assert.equal(extractionFps(3.33), 8);
+});
+
+test("buildExtractArgs uses the requested fps", () => {
+  assert.equal(frameFilter(5), "fps=5,scale=1280:-2");
+  assert.deepEqual(
+    buildExtractArgs({ clip: "C:\\a\\clip.mp4", framesDir: "C:\\a\\frames", fps: 5 }).slice(5, 7),
+    ["-vf", "fps=5,scale=1280:-2"],
   );
 });
