@@ -47,3 +47,13 @@
 - Commands, viewports/devices and outcomes, with evidence paths
 - Decisions or limits that affect the next session
 - Next unfinished step
+
+## 2026-11-22 · Overnight scan quality run (paused early by owner)
+
+- Isolated work branch `work/scan-quality-overnight-20261122-153241` in new sibling worktree `../Lihatdulu-overnight-20261122-153241`, based on audited baseline `a26d952` (`origin/main`). Primary checkout and `var/scans` were not modified.
+- Fixed the confirmed `src/scan-viewer.js` defects: position is now `-R*c` (was `-c` while rotating), subject fit uses per-axis 1st/99th percentile splat centers with raw-box fallback, a self-contained subject orbit replaces the camera-translating SparkControls use, resize keeps the pose, and an explicit "Atur ulang" reset plus a deterministic `host.scanViewer` pose API were added. New pure helpers live in `src/scan-viewer-math.js`; 9 new unit tests. `npm run build` passes; `npm run test:unit` 206/206 pass.
+- New QA harness `scripts/qa-scan-views.mjs` renders fixed camera poses at 1440x900/390x844 against a run-local scan root (never the primary `var/scans`), with before/after and orbit-proof modes.
+- Diagnostics: all seven pinned SPZs verified; transform displacement was 1.64-1.95x robust radius on 6/7 takes. Golden COLMAP re-alignment preserved (76/76, 0.96 px); Brush 3000 reproduced (155.9 s, 27 406 splats) and a 6000-step run produced 68 076 splats in 285.9 s in the same gauge.
+- Key quality finding: percentile framing cannot isolate the chair because the scans are room-scale; a subject-region cleanup does. Intersecting the aligned camera axes gives a subject centre; a CPU PLY sphere filter (radius ~2.0-2.5 reconstruction units) followed by SPZ conversion turns the noisy room scan into a clean, multi-angle chair. Best result so far: 6000-step Golden + sphere 2.0 (`golden-q2-6000-sph20`, 5 958 splats) rendered clean from four matched angles.
+- Run evidence is local under `var/overnight/20261122-153241/` (`MORNING.md`, `HANDOFF.md`, `NEXT_SESSION_PROMPT.md`, `analysis/`, `comparisons/`, `best/`). Remaining work: confirm on Repeat, give the 10.03 s stress take its verdict, integrate the cleanup as an opt-in pipeline profile, regressions, and the physical-phone check.
+- Next unfinished step: resume from `var/overnight/20261122-153241/NEXT_SESSION_PROMPT.md`.
