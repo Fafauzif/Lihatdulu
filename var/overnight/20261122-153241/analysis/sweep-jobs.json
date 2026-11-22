@@ -1,0 +1,50 @@
+{
+  "sph18": {
+    "id": "0a0e0b8b-33d2-4402-a178-227caf63fb76",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\sweep\\g-q2-sph18.spz",
+    "splats": 4885,
+    "bytes": 100994
+  },
+  "sph19": {
+    "id": "94cdd91e-bb41-4cbb-9b39-7e9bc293e4ca",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\sweep\\g-q2-sph19.spz",
+    "splats": 5507,
+    "bytes": 113817
+  },
+  "sph20": {
+    "id": "b1ae867d-6ad9-4ddd-9a5e-b37959000ad9",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\sweep\\g-q2-sph20.spz",
+    "splats": 5958,
+    "bytes": 124705
+  },
+  "sph22": {
+    "id": "4607e316-78f8-4d39-91ab-339d9e16059b",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\sweep\\g-q2-sph22.spz",
+    "splats": 6374,
+    "bytes": 133194
+  },
+  "sph24": {
+    "id": "1fbb2088-5eda-4162-8bbc-cb4744270d7c",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\sweep\\g-q2-sph24.spz",
+    "splats": 6755,
+    "bytes": 141369
+  },
+  "sph26": {
+    "id": "7910b778-04de-4716-a5f0-66d4ab1480b0",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\sweep\\g-q2-sph26.spz",
+    "splats": 7350,
+    "bytes": 154758
+  },
+  "sph20-op02": {
+    "id": "3f3f2750-9c56-4dc1-b3bc-ad3a682a3665",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\sweep\\g-q2-sph20-op02.spz",
+    "splats": 5605,
+    "bytes": 115943
+  },
+  "sph22-op05": {
+    "id": "e733118a-a0bf-44ac-84fe-87e8fdd5b8b4",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\sweep\\g-q2-sph22-op05.spz",
+    "splats": 4764,
+    "bytes": 98266
+  }
+}

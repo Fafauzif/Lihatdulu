@@ -1,0 +1,14 @@
+{
+  "rule-median": {
+    "id": "3d332ad9-c5fd-4199-b191-a0b755339566",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\golden-rule-median.spz",
+    "splats": 6242,
+    "bytes": 131755
+  },
+  "rule-ray": {
+    "id": "09ce677c-a5b4-419b-ac39-e57bf8ef42f6",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\golden-rule-ray.spz",
+    "splats": 7236,
+    "bytes": 152208
+  }
+}

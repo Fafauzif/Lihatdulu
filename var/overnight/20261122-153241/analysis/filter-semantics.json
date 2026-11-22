@@ -1,0 +1,30 @@
+{
+  "tool": "splat-transform v3.12.0",
+  "input": "golden scan.spz",
+  "results": [
+    {
+      "filter": "scale_0,gt,1",
+      "toolRows": 220,
+      "predictedKeepIfLinear": 220,
+      "predictedKeepIfRawLogit": 27,
+      "exit": 0,
+      "verdict": "linear"
+    },
+    {
+      "filter": "opacity,gt,0.5",
+      "toolRows": 3646,
+      "predictedKeepIfLinear": 3646,
+      "predictedKeepIfRawLogit": 1956,
+      "exit": 0,
+      "verdict": "linear"
+    },
+    {
+      "filter": "scale_0,gt,0.5",
+      "toolRows": 761,
+      "predictedKeepIfLinear": 761,
+      "predictedKeepIfRawLogit": 83,
+      "exit": 0,
+      "verdict": "linear"
+    }
+  ]
+}
