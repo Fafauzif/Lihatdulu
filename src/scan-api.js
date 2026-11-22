@@ -45,7 +45,7 @@ export const ERROR_COPY = Object.freeze({
   footage_short:
     "Rekaman terlalu singkat. Rekam 30–45 detik sambil berjalan mengelilingi barang.",
   alignment_failed:
-    "Kamera tidak cukup mengenali barangnya. Rekam lebih pelan dengan cahaya lebih terang.",
+    "Kamera tidak cukup mengenali barangnya. Untuk barang gelap, nyalakan lampu dari samping dan rekam lebih pelan.",
   artifact_too_large:
     "Hasilnya terlalu besar untuk dibuka di ponsel. Rekam lebih singkat.",
   disk_low: "Ruang penyimpanan laptop demo hampir penuh.",

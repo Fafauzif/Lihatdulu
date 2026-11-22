@@ -34,7 +34,35 @@ export const TIMEOUTS = Object.freeze({
   convert: 600_000,
 });
 
-export const FRAME_FILTER = "fps=3,scale=1280:-2";
+export const BASE_FRAME_FPS = 3;
+export const MAX_FRAME_FPS = 8;
+
+export function extractionFps(
+  durationS,
+  { minFrames = MIN_FRAMES, base = BASE_FRAME_FPS, max = MAX_FRAME_FPS } = {},
+) {
+  const seconds = Math.max(1, durationS);
+  return Math.min(max, Math.max(base, Math.ceil(minFrames / seconds)));
+}
+
+export function frameFilter(fps) {
+  return `fps=${fps},scale=1280:-2`;
+}
+
+// VFR phone clips can yield one frame fewer than durationS * fps (a 15.00 s
+// take at 4 fps produced 59). If the unchanged floor is missed, raise the
+// rate one step at a time up to MAX_FRAME_FPS instead of rejecting usable
+// footage; the 60-frame product limit itself never moves.
+export function retryExtractionFps(
+  fps,
+  extracted,
+  { minFrames = MIN_FRAMES, max = MAX_FRAME_FPS } = {},
+) {
+  if (extracted >= minFrames || fps >= max) return null;
+  return Math.min(max, fps + 1);
+}
+
+export const FRAME_FILTER = frameFilter(BASE_FRAME_FPS);
 
 export const buildFfprobeArgs = ({ clip }) => [
   "-v",
@@ -46,14 +74,18 @@ export const buildFfprobeArgs = ({ clip }) => [
   clip,
 ];
 
-export const buildExtractArgs = ({ clip, framesDir }) => [
+export const buildExtractArgs = ({
+  clip,
+  framesDir,
+  fps = BASE_FRAME_FPS,
+}) => [
   "-hide_banner",
   "-loglevel",
   "error",
   "-i",
   clip,
   "-vf",
-  FRAME_FILTER,
+  frameFilter(fps),
   "-q:v",
   "2",
   join(framesDir, "%04d.jpg"),
@@ -177,6 +209,17 @@ export function parseRegisteredImages(text) {
     "alignment_failed",
     "Jumlah bingkai terdaftar tidak terbaca.",
   );
+}
+
+// COLMAP's mapper can split one clip into several disjoint sub-models (for
+// example a 2-image model 0 and a 60-image model 1). The largest registered
+// set is the reconstruction the rest of the pipeline must use.
+export function pickBestModel(models) {
+  let best = null;
+  for (const model of Array.isArray(models) ? models : []) {
+    if (!best || model.registered > best.registered) best = model;
+  }
+  return best;
 }
 
 export function parseSplatCount(text) {
@@ -317,6 +360,7 @@ export async function runRealPipeline(
       "footage_invalid",
       "Durasi rekaman perlu 7–50 detik. Rekam ulang.",
     );
+  let fps = extractionFps(mediaInfo.durationS);
   const media = {
     ...record.media,
     durationS: Number(mediaInfo.durationS.toFixed(1)),
@@ -326,15 +370,38 @@ export async function runRealPipeline(
 
   await updateStage("extracting");
   await mkdir(paths.frames, { recursive: true });
-  const extract = await tool(
+  timings.extractMs = 0;
+  let extract = await tool(
     "ffmpeg",
-    buildExtractArgs({ clip, framesDir: paths.frames }),
+    buildExtractArgs({ clip, framesDir: paths.frames, fps }),
     { timeoutMs: TIMEOUTS.ffmpeg, logPath: join(paths.logs, "ffmpeg.log") },
   );
-  timings.extractMs = extract.ms;
-  const frameNames = (await readdir(paths.frames))
+  timings.extractMs += extract.ms;
+  let frameNames = (await readdir(paths.frames))
     .filter((name) => name.toLowerCase().endsWith(".jpg"))
     .sort();
+  for (
+    let retryFps = retryExtractionFps(fps, frameNames.length, {
+      minFrames: rules.minFrames,
+    });
+    retryFps !== null;
+    retryFps = retryExtractionFps(fps, frameNames.length, {
+      minFrames: rules.minFrames,
+    })
+  ) {
+    fps = retryFps;
+    await rm(paths.frames, { recursive: true, force: true });
+    await mkdir(paths.frames, { recursive: true });
+    extract = await tool(
+      "ffmpeg",
+      buildExtractArgs({ clip, framesDir: paths.frames, fps }),
+      { timeoutMs: TIMEOUTS.ffmpeg, logPath: join(paths.logs, "ffmpeg.log") },
+    );
+    timings.extractMs += extract.ms;
+    frameNames = (await readdir(paths.frames))
+      .filter((name) => name.toLowerCase().endsWith(".jpg"))
+      .sort();
+  }
   if (frameNames.length < rules.minFrames)
     throw new ScanError(
       "footage_short",
@@ -362,14 +429,37 @@ export async function runRealPipeline(
     buildMapperArgs({ database, images: paths.frames, sparse }),
     { cwd: paths.logs, timeoutMs: TIMEOUTS.mapper, logPath: join(paths.logs, "colmap-map.log") },
   );
-  const analyze = await tool(
-    "colmap",
-    buildAnalyzeArgs({ model: join(sparse, "0") }),
-    { cwd: paths.logs, timeoutMs: TIMEOUTS.ffprobe, logPath: join(paths.logs, "colmap-analyze.log") },
-  );
+  const analyzeModels = (await readdir(sparse, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((left, right) => Number(left) - Number(right));
+  if (analyzeModels.length === 0)
+    throw new ScanError(
+      "alignment_failed",
+      "COLMAP tidak menghasilkan model kamera. Rekam ulang dengan gerakan lebih pelan.",
+    );
+  const models = [];
+  let analyzeMs = 0;
+  for (const name of analyzeModels) {
+    const analyze = await tool(
+      "colmap",
+      buildAnalyzeArgs({ model: join(sparse, name) }),
+      {
+        cwd: paths.logs,
+        timeoutMs: TIMEOUTS.ffprobe,
+        logPath: join(paths.logs, `colmap-analyze-${name}.log`),
+      },
+    );
+    analyzeMs += analyze.ms;
+    models.push({
+      name,
+      registered: parseRegisteredImages(analyze.stdout),
+    });
+  }
   timings.alignMs =
-    feature.ms + match.ms + map.ms + analyze.ms || Date.now() - alignStarted;
-  const registered = parseRegisteredImages(analyze.stdout);
+    feature.ms + match.ms + map.ms + analyzeMs || Date.now() - alignStarted;
+  const bestModel = pickBestModel(models);
+  const registered = bestModel.registered;
   const ratio = registered / frameNames.length;
   if (registered < rules.minRegistered || ratio < rules.minRegisteredRatio)
     throw new ScanError(
@@ -380,7 +470,7 @@ export async function runRealPipeline(
   const dataset = join(paths.work, "dataset");
   await mkdir(join(dataset, "sparse"), { recursive: true });
   await cp(paths.frames, join(dataset, "images"), { recursive: true });
-  await cp(join(sparse, "0"), join(dataset, "sparse", "0"), {
+  await cp(join(sparse, bestModel.name), join(dataset, "sparse", "0"), {
     recursive: true,
   });
 

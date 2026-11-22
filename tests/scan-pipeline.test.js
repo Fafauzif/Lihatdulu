@@ -13,6 +13,10 @@ import {
   buildFfprobeArgs,
   buildMapperArgs,
   buildMatchArgs,
+  extractionFps,
+  frameFilter,
+  pickBestModel,
+  retryExtractionFps,
 } from "../server/scan-pipeline.mjs";
 
 test("buildExtractArgs uses the recorded filter and numbered output", () => {
@@ -120,4 +124,53 @@ test("conversion and decimation builders keep the CLI order", () => {
     buildDecimateArgs({ inputPly: "D:\\scan.ply", outputPly: "D:\\small.ply" }),
     ["D:\\scan.ply", "--decimate", "2000000", "D:\\small.ply"],
   );
+});
+
+test("short takes extract at a higher fps to reach the frame floor", () => {
+  assert.equal(extractionFps(25.35), 3);
+  assert.equal(extractionFps(20.13), 3);
+  assert.equal(extractionFps(15.0), 4);
+  assert.equal(extractionFps(14.585), 5);
+  assert.equal(extractionFps(10.03), 6);
+  assert.equal(extractionFps(3.33), 8);
+});
+
+test("buildExtractArgs uses the requested fps", () => {
+  assert.equal(frameFilter(5), "fps=5,scale=1280:-2");
+  assert.deepEqual(
+    buildExtractArgs({ clip: "C:\\a\\clip.mp4", framesDir: "C:\\a\\frames", fps: 5 }).slice(5, 7),
+    ["-vf", "fps=5,scale=1280:-2"],
+  );
+});
+
+test("pickBestModel uses the model with the most registered images", () => {
+  assert.equal(pickBestModel([]), null);
+  assert.deepEqual(
+    pickBestModel([
+      { name: "0", registered: 2 },
+      { name: "1", registered: 60 },
+    ]),
+    { name: "1", registered: 60 },
+  );
+  assert.deepEqual(pickBestModel([{ name: "0", registered: 76 }]), {
+    name: "0",
+    registered: 76,
+  });
+  // Ties keep the first model (numeric folder order), not the last analysed.
+  assert.deepEqual(
+    pickBestModel([
+      { name: "0", registered: 12 },
+      { name: "1", registered: 12 },
+    ]),
+    { name: "0", registered: 12 },
+  );
+});
+
+test("retryExtractionFps lifts the rate only when the frame floor is missed", () => {
+  assert.equal(retryExtractionFps(4, 60), null);
+  assert.equal(retryExtractionFps(4, 59), 5);
+  assert.equal(retryExtractionFps(8, 30), null);
+  assert.equal(retryExtractionFps(6, 10), 7);
+  assert.equal(retryExtractionFps(4, 59, { minFrames: 120, max: 8 }), 5);
+  assert.equal(retryExtractionFps(7, 10, { max: 8 }), 8);
 });

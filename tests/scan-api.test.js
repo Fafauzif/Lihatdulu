@@ -54,3 +54,7 @@ test("every server stage and error code has Indonesian copy", () => {
 test("nextPollDelay backs off and caps at 8 seconds", () => {
   assert.deepEqual([0, 1, 2, 3, 9].map(nextPollDelay), [2000, 3000, 5000, 8000, 8000]);
 });
+
+test("alignment copy names the dark-object fix", () => {
+  assert.match(ERROR_COPY.alignment_failed, /gelap.*samping/i);
+});
