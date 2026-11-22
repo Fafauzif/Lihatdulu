@@ -1,0 +1,212 @@
+[
+  {
+    "file": "VID_20261121_184212135.mp4",
+    "sizeBytes": 25541807,
+    "width": 1920,
+    "height": 1080,
+    "durationS": 10.03,
+    "fps": 60,
+    "codec": "h264",
+    "bitRate": 20376857,
+    "quality": "original",
+    "warnings": [],
+    "frames": [
+      {
+        "timeSeconds": 1,
+        "file": "frames/VID_20261121_184212135/frame-1.jpg"
+      },
+      {
+        "timeSeconds": 5.01,
+        "file": "frames/VID_20261121_184212135/frame-2.jpg"
+      },
+      {
+        "timeSeconds": 9.03,
+        "file": "frames/VID_20261121_184212135/frame-3.jpg"
+      }
+    ]
+  },
+  {
+    "file": "VID_20261121_184227976.mp4",
+    "sizeBytes": 64274172,
+    "width": 1920,
+    "height": 1080,
+    "durationS": 25.35,
+    "fps": 60,
+    "codec": "h264",
+    "bitRate": 20284595,
+    "quality": "original",
+    "warnings": [],
+    "frames": [
+      {
+        "timeSeconds": 2.54,
+        "file": "frames/VID_20261121_184227976/frame-1.jpg"
+      },
+      {
+        "timeSeconds": 12.68,
+        "file": "frames/VID_20261121_184227976/frame-2.jpg"
+      },
+      {
+        "timeSeconds": 22.82,
+        "file": "frames/VID_20261121_184227976/frame-3.jpg"
+      }
+    ]
+  },
+  {
+    "file": "VID_20261121_184320272.mp4",
+    "sizeBytes": 25903775,
+    "width": 1920,
+    "height": 1080,
+    "durationS": 10.21,
+    "fps": 60,
+    "codec": "h264",
+    "bitRate": 20300515,
+    "quality": "original",
+    "warnings": [],
+    "frames": [
+      {
+        "timeSeconds": 1.02,
+        "file": "frames/VID_20261121_184320272/frame-1.jpg"
+      },
+      {
+        "timeSeconds": 5.11,
+        "file": "frames/VID_20261121_184320272/frame-2.jpg"
+      },
+      {
+        "timeSeconds": 9.19,
+        "file": "frames/VID_20261121_184320272/frame-3.jpg"
+      }
+    ]
+  },
+  {
+    "file": "VID_20261121_184333634.mp4",
+    "sizeBytes": 8835974,
+    "width": 1920,
+    "height": 1080,
+    "durationS": 3.33,
+    "fps": 60,
+    "codec": "h264",
+    "bitRate": 21197786,
+    "quality": "original",
+    "warnings": [
+      "Durasi 3.33 detik; minimal 8 detik."
+    ],
+    "frames": [
+      {
+        "timeSeconds": 0.33,
+        "file": "frames/VID_20261121_184333634/frame-1.jpg"
+      },
+      {
+        "timeSeconds": 1.67,
+        "file": "frames/VID_20261121_184333634/frame-2.jpg"
+      },
+      {
+        "timeSeconds": 3,
+        "file": "frames/VID_20261121_184333634/frame-3.jpg"
+      }
+    ]
+  },
+  {
+    "file": "VID_20261121_184349140.mp4",
+    "sizeBytes": 51012275,
+    "width": 1920,
+    "height": 1080,
+    "durationS": 20.13,
+    "fps": 60,
+    "codec": "h264",
+    "bitRate": 20270281,
+    "quality": "original",
+    "warnings": [],
+    "frames": [
+      {
+        "timeSeconds": 2.01,
+        "file": "frames/VID_20261121_184349140/frame-1.jpg"
+      },
+      {
+        "timeSeconds": 10.07,
+        "file": "frames/VID_20261121_184349140/frame-2.jpg"
+      },
+      {
+        "timeSeconds": 18.12,
+        "file": "frames/VID_20261121_184349140/frame-3.jpg"
+      }
+    ]
+  },
+  {
+    "file": "VID_20261121_184453628.mp4",
+    "sizeBytes": 36955391,
+    "width": 1920,
+    "height": 1080,
+    "durationS": 14.59,
+    "fps": 60,
+    "codec": "h264",
+    "bitRate": 20269747,
+    "quality": "original",
+    "warnings": [],
+    "frames": [
+      {
+        "timeSeconds": 1.46,
+        "file": "frames/VID_20261121_184453628/frame-1.jpg"
+      },
+      {
+        "timeSeconds": 7.3,
+        "file": "frames/VID_20261121_184453628/frame-2.jpg"
+      },
+      {
+        "timeSeconds": 13.13,
+        "file": "frames/VID_20261121_184453628/frame-3.jpg"
+      }
+    ]
+  },
+  {
+    "file": "VID_20261121_184626753.mp4",
+    "sizeBytes": 38014024,
+    "width": 1920,
+    "height": 1080,
+    "durationS": 15,
+    "fps": 60,
+    "codec": "h264",
+    "bitRate": 20272400,
+    "quality": "original",
+    "warnings": [],
+    "frames": [
+      {
+        "timeSeconds": 1.5,
+        "file": "frames/VID_20261121_184626753/frame-1.jpg"
+      },
+      {
+        "timeSeconds": 7.5,
+        "file": "frames/VID_20261121_184626753/frame-2.jpg"
+      },
+      {
+        "timeSeconds": 13.5,
+        "file": "frames/VID_20261121_184626753/frame-3.jpg"
+      }
+    ]
+  },
+  {
+    "file": "VID_20261121_184714115.mp4",
+    "sizeBytes": 89837789,
+    "width": 3840,
+    "height": 2160,
+    "durationS": 14.62,
+    "fps": 29.87,
+    "codec": "h264",
+    "bitRate": 49147216,
+    "quality": "original",
+    "warnings": [],
+    "frames": [
+      {
+        "timeSeconds": 1.46,
+        "file": "frames/VID_20261121_184714115/frame-1.jpg"
+      },
+      {
+        "timeSeconds": 7.31,
+        "file": "frames/VID_20261121_184714115/frame-2.jpg"
+      },
+      {
+        "timeSeconds": 13.16,
+        "file": "frames/VID_20261121_184714115/frame-3.jpg"
+      }
+    ]
+  }
+]

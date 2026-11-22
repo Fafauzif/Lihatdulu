@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "id": "bb588361-7337-490d-9dbf-2ce9492ca3b1",
+  "clientId": "",
+  "createdAt": "2026-11-22T04:10:49.406Z",
+  "updatedAt": "2026-11-22T04:15:09.746Z",
+  "stage": "ready",
+  "meta": {
+    "title": "VID_20261121_184453628",
+    "widthCm": 60,
+    "depthCm": 60,
+    "heightCm": 100,
+    "conditionNote": "Uji klip pindai, bukan listing.",
+    "device": "clip study"
+  },
+  "media": {
+    "contentType": "video/mp4",
+    "bytes": 36955391,
+    "durationS": 14.6,
+    "width": 1920,
+    "height": 1080
+  },
+  "provenance": {
+    "source": {
+      "clipSeconds": 14.6,
+      "device": "clip study"
+    },
+    "frames": {
+      "extracted": 72,
+      "registered": 72,
+      "ratio": 1
+    },
+    "timings": {
+      "extractMs": 2400,
+      "alignMs": 113234,
+      "trainMs": 143254,
+      "convertMs": 489,
+      "totalMs": 259377
+    },
+    "artifact": {
+      "format": "spz",
+      "bytes": 538833,
+      "splatCount": 27466
+    },
+    "tools": {
+      "ffmpeg": "ffmpeg version 8.1.2-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+      "colmap": "COLMAP 4.2.1 (Commit bd1fcf6 on 2026-09-29 with CUDA, boost hash maps)",
+      "brush": "brush-cli 0.3.0",
+      "splatTransform": "splat-transform v3.12.0 (5d5be2b)"
+    }
+  },
+  "artifact": {
+    "format": "spz",
+    "bytes": 538833,
+    "splatCount": 27466,
+    "file": "scan.spz",
+    "stills": [
+      "000.jpg",
+      "001.jpg",
+      "002.jpg"
+    ]
+  },
+  "error": null
+}

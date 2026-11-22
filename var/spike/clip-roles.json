@@ -1,0 +1,14 @@
+{
+  "preliminary": false,
+  "excluded": ["VID_20261121_184333634.mp4"],
+  "golden": "VID_20261121_184227976.mp4",
+  "repeat": "VID_20261121_184349140.mp4",
+  "variants": [
+    "VID_20261121_184212135.mp4",
+    "VID_20261121_184320272.mp4",
+    "VID_20261121_184453628.mp4",
+    "VID_20261121_184626753.mp4",
+    "VID_20261121_184714115.mp4"
+  ],
+  "notes": "Roles come from the plan's recorded shallow pass (contact sheet at 10/50/90 % frames). The contact sheet was not re-opened here because the image guardrail forbids reading rendered images; inventory durations and order agree with the shallow-pass table. Golden = 25.35 s widest orbit, Repeat = 20.13 s second-longest, Variants = the five remaining originals, Excluded = the 3.33 s false start."
+}
