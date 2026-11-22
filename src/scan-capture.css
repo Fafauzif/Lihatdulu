@@ -60,6 +60,17 @@
   line-height: 1.55;
 }
 
+.scan-tips {
+  display: grid;
+  gap: 4px;
+  max-width: 56ch;
+  margin: 0 0 22px;
+  padding-left: 18px;
+  color: var(--ld-ink-muted);
+  font-size: var(--ld-text-sm);
+  line-height: 1.5;
+}
+
 .scan-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);

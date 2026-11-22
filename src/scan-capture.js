@@ -2,6 +2,7 @@ import "./scan-capture.css";
 import { icon } from "./components.js";
 import { ERROR_COPY, uploadScan } from "./scan-api.js";
 import {
+  CAPTURE_TIPS,
   GUIDANCE,
   MAX_SECONDS,
   MIN_SECONDS,
@@ -28,6 +29,9 @@ export function renderScanCapture() {
       <h1 id="scan-heading">Pindai furniturmu.</h1>
       <p>Rekam satu putaran pelan. Pembeli bisa memutar hasilnya dari setiap sisi.</p>
     </div>
+    <ul class="scan-tips">
+      ${CAPTURE_TIPS.map((tip) => `<li>${tip}</li>`).join("")}
+    </ul>
     <div class="scan-grid">
       <div class="scan-stage">
         <video data-scan-video playsinline muted autoplay></video>

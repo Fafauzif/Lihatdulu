@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  CAPTURE_TIPS,
   GUIDANCE,
   MAX_SECONDS,
   MIN_SECONDS,
@@ -51,4 +52,11 @@ test("guidance advances every seven seconds and stops at the last prompt", () =>
   assert.equal(guidanceAt(7), GUIDANCE[1]);
   assert.equal(guidanceAt(60), GUIDANCE[5]);
   assert.equal(guidanceAt(-4), GUIDANCE[0]);
+});
+
+test("capture tips cover dark furniture and backlight", () => {
+  assert.equal(CAPTURE_TIPS.length, 2);
+  assert.match(CAPTURE_TIPS[0], /gelap.*samping/i);
+  assert.match(CAPTURE_TIPS[1], /jendela.*belakang/i);
+  assert.equal(GUIDANCE.length, 6);
 });

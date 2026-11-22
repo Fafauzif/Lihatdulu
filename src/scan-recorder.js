@@ -14,6 +14,13 @@ export const GUIDANCE = Object.freeze([
   "Kembali ke depan untuk menutup putaran.",
 ]);
 
+// Two extra tips for dark furniture in a bright room, learned from the real
+// chair takes: side light separates the object, backlight flattens it.
+export const CAPTURE_TIPS = Object.freeze([
+  "Untuk barang gelap, nyalakan lampu dari samping, bukan dari belakang barang.",
+  "Hindari jendela terang tepat di belakang barang saat merekam.",
+]);
+
 // iOS records MP4; Android Chromium usually offers WebM. Try the most
 // compatible type first, then fall back until MediaRecorder accepts one.
 export const MIME_PREFERENCE = Object.freeze([
