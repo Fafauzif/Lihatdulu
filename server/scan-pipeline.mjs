@@ -49,6 +49,19 @@ export function frameFilter(fps) {
   return `fps=${fps},scale=1280:-2`;
 }
 
+// VFR phone clips can yield one frame fewer than durationS * fps (a 15.00 s
+// take at 4 fps produced 59). If the unchanged floor is missed, raise the
+// rate one step at a time up to MAX_FRAME_FPS instead of rejecting usable
+// footage; the 60-frame product limit itself never moves.
+export function retryExtractionFps(
+  fps,
+  extracted,
+  { minFrames = MIN_FRAMES, max = MAX_FRAME_FPS } = {},
+) {
+  if (extracted >= minFrames || fps >= max) return null;
+  return Math.min(max, fps + 1);
+}
+
 export const FRAME_FILTER = frameFilter(BASE_FRAME_FPS);
 
 export const buildFfprobeArgs = ({ clip }) => [
@@ -347,7 +360,7 @@ export async function runRealPipeline(
       "footage_invalid",
       "Durasi rekaman perlu 7–50 detik. Rekam ulang.",
     );
-  const fps = extractionFps(mediaInfo.durationS);
+  let fps = extractionFps(mediaInfo.durationS);
   const media = {
     ...record.media,
     durationS: Number(mediaInfo.durationS.toFixed(1)),
@@ -357,15 +370,38 @@ export async function runRealPipeline(
 
   await updateStage("extracting");
   await mkdir(paths.frames, { recursive: true });
-  const extract = await tool(
+  timings.extractMs = 0;
+  let extract = await tool(
     "ffmpeg",
     buildExtractArgs({ clip, framesDir: paths.frames, fps }),
     { timeoutMs: TIMEOUTS.ffmpeg, logPath: join(paths.logs, "ffmpeg.log") },
   );
-  timings.extractMs = extract.ms;
-  const frameNames = (await readdir(paths.frames))
+  timings.extractMs += extract.ms;
+  let frameNames = (await readdir(paths.frames))
     .filter((name) => name.toLowerCase().endsWith(".jpg"))
     .sort();
+  for (
+    let retryFps = retryExtractionFps(fps, frameNames.length, {
+      minFrames: rules.minFrames,
+    });
+    retryFps !== null;
+    retryFps = retryExtractionFps(fps, frameNames.length, {
+      minFrames: rules.minFrames,
+    })
+  ) {
+    fps = retryFps;
+    await rm(paths.frames, { recursive: true, force: true });
+    await mkdir(paths.frames, { recursive: true });
+    extract = await tool(
+      "ffmpeg",
+      buildExtractArgs({ clip, framesDir: paths.frames, fps }),
+      { timeoutMs: TIMEOUTS.ffmpeg, logPath: join(paths.logs, "ffmpeg.log") },
+    );
+    timings.extractMs += extract.ms;
+    frameNames = (await readdir(paths.frames))
+      .filter((name) => name.toLowerCase().endsWith(".jpg"))
+      .sort();
+  }
   if (frameNames.length < rules.minFrames)
     throw new ScanError(
       "footage_short",

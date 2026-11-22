@@ -16,6 +16,7 @@ import {
   extractionFps,
   frameFilter,
   pickBestModel,
+  retryExtractionFps,
 } from "../server/scan-pipeline.mjs";
 
 test("buildExtractArgs uses the recorded filter and numbered output", () => {
@@ -163,4 +164,13 @@ test("pickBestModel uses the model with the most registered images", () => {
     ]),
     { name: "0", registered: 12 },
   );
+});
+
+test("retryExtractionFps lifts the rate only when the frame floor is missed", () => {
+  assert.equal(retryExtractionFps(4, 60), null);
+  assert.equal(retryExtractionFps(4, 59), 5);
+  assert.equal(retryExtractionFps(8, 30), null);
+  assert.equal(retryExtractionFps(6, 10), 7);
+  assert.equal(retryExtractionFps(4, 59, { minFrames: 120, max: 8 }), 5);
+  assert.equal(retryExtractionFps(7, 10, { max: 8 }), 8);
 });
