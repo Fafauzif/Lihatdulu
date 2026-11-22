@@ -45,7 +45,12 @@ async function start(t, overrides = {}) {
     failMode: config.mockFail,
     failOnce: config.mockFailOnce,
   });
-  const service = createKiriService({ config, client, log });
+  const service = createKiriService({
+    config,
+    client,
+    log,
+    ...(overrides.frames ? { frames: overrides.frames } : {}),
+  });
   const server = createKiriServer({ config, service, log });
   await new Promise((done) => server.listen(0, "127.0.0.1", done));
   t.after(
@@ -228,4 +233,46 @@ test("the configured key never appears in responses, logs or job records", async
   assert.ok(!jobFile.includes(secret));
   assert.ok(!responseText.includes(secret));
   assert.ok(!logText.includes(secret));
+});
+
+test("a mesh job serves its GLB at result.glb and never at result.spz", async (t) => {
+  // A real clip is needed for stills; the HTTP layer is what this test checks,
+  // so the frame list is fixed and the mock only reads the count.
+  const frames = {
+    async extract({ directory }) {
+      return Array.from({ length: 24 }, (_, index) => ({
+        path: join(directory, `frame-${index}.jpg`),
+        filename: `frame-${index}.jpg`,
+      }));
+    },
+  };
+  const { base, root } = await start(t, {
+    env: { KIRI_INPUT: "mesh" },
+    frames,
+  });
+  const created = await upload(base, mp4());
+  const ready = await waitForStage(base, created.body.id, ["ready", "failed"]);
+  assert.equal(ready.stage, "ready");
+  assert.equal(ready.artifact.format, "glb");
+  assert.match(ready.artifact.url, /result\.glb$/);
+  assert.equal(ready.artifact.triangles, 72);
+  assert.equal(ready.artifact.splatCount, null);
+
+  const artifact = await fetch(`${base}${ready.artifact.url}`);
+  assert.equal(artifact.status, 200);
+  assert.equal(artifact.headers.get("content-type"), "model/gltf-binary");
+  const bytes = Buffer.from(await artifact.arrayBuffer());
+  assert.equal(bytes.toString("latin1", 0, 4), "glTF");
+  assert.equal(bytes.readUInt32LE(4), 2);
+  assert.equal(bytes.readUInt32LE(8), bytes.length);
+  assert.equal(bytes.length, ready.artifact.bytes);
+
+  // The stale splat link must not stream mesh bytes under the SPZ type.
+  const wrong = await fetch(`${base}/api/kiri/jobs/${created.body.id}/result.spz`);
+  assert.equal(wrong.status, 404);
+
+  const head = await fetch(`${base}${ready.artifact.url}`, { method: "HEAD" });
+  assert.equal(head.status, 200);
+  assert.equal(head.headers.get("content-length"), String(bytes.length));
+  assert.equal((await listJobs(root)).length, 1);
 });

@@ -205,3 +205,23 @@ test("result details say when the model came from stills", () => {
   const video = detailRows({ mock: false, input: { mode: "video" } });
   assert.equal(video.find(([term]) => term === "Sumber")[1], "KIRI Engine · 3DGS video, masking otomatis");
 });
+
+test("a mesh result names the featureless profile and counts triangles", () => {
+  const rows = detailRows({
+    mock: false,
+    stage: "ready",
+    source: { filename: "kursi.mp4", bytes: 1024 },
+    input: { mode: "mesh", photos: 101, fileFormat: "GLB" },
+    kiri: { serial: "abcdef1234567890" },
+    artifact: { format: "glb", bytes: 89_582_948, triangles: 815_094, splatCount: null },
+  });
+  assert.equal(
+    rows.find(([term]) => term === "Sumber")[1],
+    "KIRI Engine · mesh objek (featureless), 101 foto dari video",
+  );
+  assert.equal(rows.find(([term]) => term === "Jumlah segitiga")[1], "815.094");
+  assert.match(rows.find(([term]) => term === "Ukuran GLB")[1], /85,4 MB|85,5 MB|85 MB/);
+  // A mesh must never claim splats it does not have.
+  assert.equal(rows.some(([term]) => term === "Jumlah splat"), false);
+  assert.equal(rows.some(([term]) => term === "Ukuran SPZ"), false);
+});

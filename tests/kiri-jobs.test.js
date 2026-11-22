@@ -95,6 +95,24 @@ test("pruning keeps active jobs and the newest finished ones", async (t) => {
   assert.ok(left.some((job) => job.stage === "processing"));
 });
 
+test("a mesh job's DTO points at result.glb and reports triangles", async (t) => {
+  const root = await tempRoot(t);
+  const job = newJobRecord({ videoHash: "mesh-hash", filename: "kursi.mp4", bytes: 10, provider: "mock" });
+  await saveNewJob(root, job);
+  await updateJob(root, job.id, {
+    stage: "ready",
+    input: { mode: "mesh", photos: 101, fileFormat: "GLB" },
+    artifact: { format: "glb", file: "result.glb", bytes: 4096, triangles: 72 },
+  });
+  const dto = toJobDto(await readJob(root, job.id), { mock: true });
+  assert.equal(dto.artifact.format, "glb");
+  assert.equal(dto.artifact.url, artifactUrl(job.id, "glb"));
+  assert.match(dto.artifact.url, /result\.glb$/);
+  assert.equal(dto.artifact.triangles, 72);
+  assert.equal(dto.artifact.splatCount, null);
+  assert.equal(dto.input.mode, "mesh");
+});
+
 test("the DTO exposes the artifact URL but no hash or local path", async (t) => {
   const root = await tempRoot(t);
   const job = newJobRecord({ videoHash: "secret-hash", filename: "kursi.mp4", bytes: 10, provider: "mock" });

@@ -28,6 +28,39 @@ test("parseDotEnv reads plain, quoted and exported values", () => {
   assert.equal(values.KIRI_JOBS_ROOT, "var/kiri");
 });
 
+test("KIRI_INPUT selects the mesh profile and unknown values stay on video", () => {
+  const base = { KIRI_API_KEY: "kiri-test-key" };
+  assert.equal(readKiriConfig(base, process.cwd()).input.mode, "video");
+  assert.equal(
+    readKiriConfig({ ...base, KIRI_INPUT: "mesh" }, process.cwd()).input.mode,
+    "mesh",
+  );
+  assert.equal(
+    readKiriConfig({ ...base, KIRI_INPUT: "photo" }, process.cwd()).input.mode,
+    "photo",
+  );
+  // A typo must never silently pick a paid profile.
+  assert.equal(
+    readKiriConfig({ ...base, KIRI_INPUT: "glb" }, process.cwd()).input.mode,
+    "video",
+  );
+  assert.equal(
+    readKiriConfig({ ...base, KIRI_INPUT: "mesh" }, process.cwd()).input.fileFormat,
+    "GLB",
+  );
+});
+
+test("the mesh artifact has its own size ceiling", () => {
+  const config = readKiriConfig(
+    { KIRI_API_KEY: "k", KIRI_MAX_MODEL_BYTES: "123456" },
+    process.cwd(),
+  );
+  assert.equal(config.limits.maxModelBytes, 123456);
+  // The SPZ ceiling is untouched by the mesh knob.
+  assert.equal(config.limits.maxArtifactBytes, DEFAULTS.maxArtifactBytes);
+  assert.equal(publicConfig(config).inputMode, "video");
+});
+
 test("loadDotEnv never overwrites an existing variable", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "lihatdulu-env-"));
   t.after(() => rm(dir, { recursive: true, force: true }));

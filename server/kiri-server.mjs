@@ -144,20 +144,29 @@ async function receiveUpload(req, destination, maxBytes) {
   return { bytes, hash: hash.digest("hex"), head };
 }
 
-async function serveArtifact(req, res, config, id) {
+// A job owns exactly one artifact, in the format KIRI produced: SPZ for splats,
+// GLB for a featureless mesh. Asking for the other extension is a 404, so a
+// stale link can never stream the wrong bytes with the wrong content type.
+async function serveArtifact(req, res, config, id, requested = "spz") {
   const job = await readJob(config.jobsRoot, id);
   if (!job || !job.artifact) throw new KiriError("not_found");
+  const format = job.artifact.format === "glb" ? "glb" : "spz";
+  if (requested !== format) throw new KiriError("not_found");
   const paths = jobPaths(config.jobsRoot, id);
+  const file = format === "glb" ? paths.model : paths.artifact;
   let size;
   try {
-    size = (await stat(paths.artifact)).size;
+    size = (await stat(file)).size;
   } catch {
-    throw new KiriError("spz_invalid", { detail: "Berkas SPZ hilang." });
+    throw new KiriError(format === "glb" ? "model_invalid" : "spz_invalid", {
+      detail: format === "glb" ? "Berkas GLB hilang." : "Berkas SPZ hilang.",
+    });
   }
   res.writeHead(200, {
-    "content-type": "application/octet-stream",
+    "content-type":
+      format === "glb" ? "model/gltf-binary" : "application/octet-stream",
     "content-length": size,
-    "content-disposition": `inline; filename="pindai-${id}.spz"`,
+    "content-disposition": `inline; filename="pindai-${id}.${format}"`,
     "cache-control": "private, max-age=31536000, immutable",
     "x-content-type-options": "nosniff",
   });
@@ -165,7 +174,7 @@ async function serveArtifact(req, res, config, id) {
     res.end();
     return;
   }
-  createReadStream(paths.artifact).pipe(res);
+  createReadStream(file).pipe(res);
 }
 
 async function serveStatic(req, res, config, pathname) {
@@ -254,15 +263,16 @@ export function createKiriServer({
         return;
       }
 
-      const jobMatch = /^\/api\/kiri\/jobs\/([^/]+)(\/retry|\/result\.spz)?$/.exec(pathname);
+      const jobMatch =
+        /^\/api\/kiri\/jobs\/([^/]+)(\/retry|\/result\.(?:spz|glb))?$/.exec(pathname);
       if (jobMatch) {
         const id = jobMatch[1];
         const suffix = jobMatch[2] ?? "";
         if (!isJobId(id)) throw new KiriError("not_found");
-        if (suffix === "/result.spz") {
+        if (suffix.startsWith("/result.")) {
           if (!["GET", "HEAD"].includes(req.method))
             return methodNotAllowed(res, ["GET", "HEAD"]);
-          await serveArtifact(req, res, config, id);
+          await serveArtifact(req, res, config, id, suffix.slice(-3));
           return;
         }
         if (suffix === "/retry") {

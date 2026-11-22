@@ -15,6 +15,10 @@ export const DEFAULTS = Object.freeze({
   maxZipBytes: 300 * 1024 * 1024,
   maxPlyBytes: 400 * 1024 * 1024,
   maxArtifactBytes: 60 * 1024 * 1024,
+  // A KIRI mesh export is a whole room shell with one texture: the target chair
+  // arrived as an 85 MB GLB. The GLB is served as-is, so it needs its own roomier
+  // ceiling than the splat artifact.
+  maxModelBytes: 240 * 1024 * 1024,
   maxSplats: 2_500_000,
   pollMinMs: 5_000,
   pollMaxMs: 30_000,
@@ -48,6 +52,13 @@ function flag(value, fallback = false) {
 function positive(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+const INPUT_MODES = new Set(["video", "photo", "mesh"]);
+
+export function inputMode(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return INPUT_MODES.has(text) ? text : DEFAULTS.inputMode;
 }
 
 function cleanBaseUrl(value) {
@@ -104,6 +115,7 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
         env.KIRI_MAX_ARTIFACT_BYTES,
         DEFAULTS.maxArtifactBytes,
       ),
+      maxModelBytes: positive(env.KIRI_MAX_MODEL_BYTES, DEFAULTS.maxModelBytes),
       maxSplats: positive(env.KIRI_MAX_SPLATS, DEFAULTS.maxSplats),
       maxDurationS: 180,
       maxWidth: 1920,
@@ -126,14 +138,15 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
     isMask: env.KIRI_ISMASK === "0" ? 0 : 1,
     input: {
       // "photo" samples the clip into stills and submits them to KIRI's 3DGS
-      // photo endpoint; "video" sends the clip itself. The default stays video
-      // until the photo profile clears the visual gate.
-      mode:
-        String(env.KIRI_INPUT || DEFAULTS.inputMode).trim().toLowerCase() === "photo"
-          ? "photo"
-          : "video",
+      // photo endpoint; "mesh" samples the same stills but asks for the
+      // featureless-object mesh pipeline, which returns a GLB; "video" sends
+      // the clip itself. Video stays the default.
+      mode: inputMode(env.KIRI_INPUT || DEFAULTS.inputMode),
       fps: positive(env.KIRI_FRAME_FPS, DEFAULTS.frameFps),
       photos: positive(env.KIRI_PHOTO_COUNT, DEFAULTS.photoCount),
+      // What the mesh pipeline should return. KIRI's docs also allow OBJ/PLY;
+      // the prototype only reads GLB, so anything else is refused upstream.
+      fileFormat: "GLB",
     },
     requestTimeoutMs: positive(
       env.KIRI_REQUEST_TIMEOUT_MS,
@@ -170,6 +183,9 @@ export function publicConfig(config) {
       maxWidth: config.limits.maxWidth,
       maxHeight: config.limits.maxHeight,
     },
+    // Only the mode name is public; the key, the paths and the profile's other
+    // knobs stay on the server.
+    inputMode: config.input?.mode ?? "video",
     poll: { ...config.poll },
   };
 }

@@ -143,6 +143,31 @@ export function pickSplatEntry(entries) {
   })[0];
 }
 
+// The featureless-object pipeline returns a mesh, not splats: one GLB plus the
+// camera set. Pick the largest GLB when a ZIP carries more than one.
+export function pickModelEntry(entries) {
+  const models = entries.filter(
+    (entry) => !entry.directory && /\.glb$/i.test(entry.name),
+  );
+  if (!models.length)
+    throw new KiriError("zip_invalid", {
+      detail: "ZIP tidak berisi berkas .glb.",
+    });
+  return models.sort(
+    (left, right) => right.uncompressedSize - left.uncompressedSize,
+  )[0];
+}
+
+export function extractModel(buffer, { maxBytes = 240 * 1024 * 1024 } = {}) {
+  const entries = listZipEntries(buffer);
+  const entry = pickModelEntry(entries);
+  if (entry.uncompressedSize > maxBytes)
+    throw new KiriError("artifact_too_large", {
+      detail: `GLB ${entry.uncompressedSize} byte melebihi batas.`,
+    });
+  return { name: entry.name, data: readZipEntry(buffer, entry) };
+}
+
 export function extractSplat(buffer, { maxBytes = 400 * 1024 * 1024 } = {}) {
   const entries = listZipEntries(buffer);
   const entry = pickSplatEntry(entries);

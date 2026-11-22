@@ -60,6 +60,10 @@ const DEFINITIONS = {
     status: 422,
     copy: "Hasil KIRI tidak berisi titik splat. Rekam ulang barangnya.",
   },
+  model_invalid: {
+    status: 422,
+    copy: "Hasil KIRI bukan berkas model 3D (GLB) yang dikenali. Rekam ulang barangnya.",
+  },
   convert_failed: {
     status: 500,
     copy: "Konversi ke SPZ gagal di server. Coba proses ulang.",

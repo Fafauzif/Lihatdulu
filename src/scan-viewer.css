@@ -43,17 +43,3 @@
   color: #ffd8d3;
 }
 
-.scan-viewer-hint {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
-  margin: 0;
-  padding: 6px 10px;
-  border-radius: var(--ld-radius-pill);
-  background: #1b2420cc;
-  color: var(--ld-stage-ink);
-  font-size: var(--ld-text-xs);
-  line-height: 1.4;
-  pointer-events: none;
-  backdrop-filter: blur(6px);
-}

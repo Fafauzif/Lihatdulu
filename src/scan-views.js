@@ -158,11 +158,13 @@ export function detailRows(dto) {
   // a different promise from sending the clip itself.
   const source = dto.mock
     ? "Mode simulasi · dibuat lokal, bukan dari KIRI"
-    : dto.input?.mode === "photo"
-      ? `KIRI Engine · 3DGS foto, ${dto.input.photos} still dari video`
-      : dto.input?.fallback
-        ? "KIRI Engine · 3DGS video, masking otomatis · mundur dari mode foto"
-        : "KIRI Engine · 3DGS video, masking otomatis";
+    : dto.input?.mode === "mesh"
+      ? `KIRI Engine · mesh objek (featureless), ${dto.input.photos} foto dari video`
+      : dto.input?.mode === "photo"
+        ? `KIRI Engine · 3DGS foto, ${dto.input.photos} still dari video`
+        : dto.input?.fallback
+          ? "KIRI Engine · 3DGS video, masking otomatis · mundur dari mode foto"
+          : "KIRI Engine · 3DGS video, masking otomatis";
   const rows = [
     ["Sumber", source],
     [
@@ -176,8 +178,16 @@ export function detailRows(dto) {
       `${dto.kiri.serial.slice(0, 12)}${dto.kiri.serial.length > 12 ? "…" : ""}`,
     ]);
   if (dto.artifact) {
-    rows.push(["Jumlah splat", Number(dto.artifact.splatCount).toLocaleString("id-ID")]);
-    rows.push(["Ukuran SPZ", formatBytes(dto.artifact.bytes)]);
+    if (dto.artifact.format === "glb") {
+      rows.push([
+        "Jumlah segitiga",
+        Number(dto.artifact.triangles ?? 0).toLocaleString("id-ID"),
+      ]);
+      rows.push(["Ukuran GLB", formatBytes(dto.artifact.bytes)]);
+    } else {
+      rows.push(["Jumlah splat", Number(dto.artifact.splatCount).toLocaleString("id-ID")]);
+      rows.push(["Ukuran SPZ", formatBytes(dto.artifact.bytes)]);
+    }
   }
   if (dto.timings?.totalMs)
     rows.push(["Waktu total", formatDuration(Math.round(dto.timings.totalMs / 1000))]);

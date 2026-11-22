@@ -1,9 +1,17 @@
 # KIRI-backed scan prototype
 
-**Status:** upload-only prototype, run once against the real KIRI API with a real
-chair clip (one credit). The pipeline, viewer, reload resume and mobile layout
-work; the returned reconstruction is **not yet a usable chair**, so the visual
-gate is still open. Details and the repeat command are at the end of this page.
+**Status:** upload-only prototype, exercised against the real KIRI API. The
+pipeline, viewer, reload resume and mobile layout work. Splat exports of a black
+mesh chair are still not usable, but KIRI's **featureless-object mesh profile**
+(`KIRI_INPUT=mesh`) returns a recognizable chair, and that is now a first-class
+artifact: GLB in, GLB served, textured mesh in the viewer. Details and the repeat
+command are at the end of this page.
+
+![Chair mesh from KIRI's featureless pipeline, four angles](assets/kiri-mesh-chair.jpg)
+
+*The working result: 101 stills from the golden clip, `/v1/open/featureless/image`,
+GLB. Quarter, side, back and top views, taken through the real viewer. Back and
+top show texture bleed — honest, and still a chair a buyer would recognise.*
 
 The old local FFmpeg → COLMAP → Brush → CUDA scanner has been removed from the
 active tree. It remains documented for provenance in
@@ -20,7 +28,8 @@ active tree. It remains documented for provenance in
 3. Upload progress, queue, processing, download/conversion, success and failure
    are shown as separate stages in Indonesian.
 4. **Buka hasil 3D** opens `/pindai/:id`, which polls the same job and lazy-loads
-   the existing SparkJS splat viewer.
+   the viewer: SparkJS for an SPZ splat cloud, three.js `GLTFLoader` for a GLB
+   mesh (`KIRI_INPUT=mesh`).
 
 Reloading either page resumes the stored job (`localStorage` key
 `lihatdulu:kiri-job`) instead of starting a new upload. The server also reuses a
@@ -33,9 +42,9 @@ job for the same video bytes (SHA-256), so a double tap cannot submit twice.
 | `server/kiri-server.mjs` | HTTP routes, raw MP4 upload, static `dist` + SPA fallback, safe logs |
 | `server/kiri-service.mjs` | submit → poll with exponential backoff → download → finalize; resume on boot |
 | `server/kiri-client.mjs` | the only live KIRI adapter; key stays here |
-| `server/kiri-mock.mjs` | labelled simulation; synthetic chair PLY, no network |
+| `server/kiri-mock.mjs` | labelled simulation; synthetic chair PLY or GLB, no network |
 | `server/kiri-jobs.mjs` | one `jobs/<uuid>/job.json` per job, atomic writes, dedupe, prune |
-| `server/kiri-artifact.mjs` | PLY property/stride validation, SPZ validation, pinned conversion |
+| `server/kiri-artifact.mjs` | PLY property/stride validation, SPZ and GLB validation, pinned conversion |
 | `server/zip.mjs` | central-directory reader with CRC and zip-slip checks |
 | `server/kiri-config.mjs` | `.env` parsing, modes and limits |
 | `server/kiri-errors.mjs` | error codes, Indonesian copy, redaction |
@@ -57,7 +66,8 @@ The browser never sees the key. It talks only to same-origin `/api/kiri/*`.
 | POST | `/api/kiri/jobs` | raw MP4 body, `x-file-name`, returns a job DTO |
 | GET | `/api/kiri/jobs/:id` | current stage, provenance, artifact URL |
 | POST | `/api/kiri/jobs/:id/retry` | re-download/convert a retryable failed job; never re-submits |
-| GET/HEAD | `/api/kiri/jobs/:id/result.spz` | the stored splat |
+| GET/HEAD | `/api/kiri/jobs/:id/result.spz` | the stored splat (`application/octet-stream`) |
+| GET/HEAD | `/api/kiri/jobs/:id/result.glb` | the stored mesh (`model/gltf-binary`) |
 
 ### Job lifecycle
 
@@ -96,6 +106,11 @@ Source of truth: <https://docs.kiriengine.app/>.
 - Base `https://api.kiriengine.app/api`, auth `Authorization: Bearer <key>`.
 - Submit `POST /v1/open/3dgs/video` (multipart `videoFile`, `isMesh=0`,
   `isMask=1`) → `data.serialize`.
+- Photo profile `POST /v1/open/3dgs/image` (multipart `imagesFiles`, 20–300
+  stills) → the same serial contract.
+- Mesh profile `POST /v1/open/featureless/image` (multipart `imagesFiles` plus
+  `fileFormat=GLB`) → the same serial contract, but the ZIP holds `3DModel.glb`
+  and `cameras.json` instead of splats. This is the route that produced a chair.
 - Status `GET /v1/open/model/getStatus?serialize=` → `-1` uploading, `0`
   processing, `1` failed, `2` successful, `3` queuing, `4` expired.
 - ZIP `GET /v1/open/model/getModelZip?serialize=` → `data.modelUrl`, valid for
@@ -119,6 +134,9 @@ Copy `.env.example` to `.env` and fill the key locally. `.env` is git-ignored.
 | `KIRI_KEEP_JOBS` | 50 | terminal jobs kept; active jobs are never pruned |
 | `KIRI_MAX_*_BYTES`, `KIRI_MAX_SPLATS` | see `kiri-config.mjs` | hard caps |
 | `KIRI_UPLOAD_TIMEOUT_MS` | 900000 | budget for sending the clip to KIRI |
+| `KIRI_INPUT` | `video` | `video`, `photo` or `mesh` (featureless GLB); unknown values fall back to `video` |
+| `KIRI_FRAME_FPS` / `KIRI_PHOTO_COUNT` | 4 / 120 | stills sampled for `photo` and `mesh`; needs `ffmpeg`, falls back to video |
+| `KIRI_MAX_MODEL_BYTES` | 240 MB | ceiling for a served GLB (the chair is 85 MB) |
 | `KIRI_MOCK_FAIL` | — | `submit`, `process` or `zip`, for the harness only |
 | `KIRI_MOCK_FAIL_ONCE` | off | fail once, then succeed |
 
@@ -130,10 +148,10 @@ otherwise `unconfigured` (upload answered with 503 `missing_key`, UI explains).
 ```sh
 npm ci
 npm run build              # dist is tracked and served by scan:serve
-npm run test:unit          # 230 pass / 0 fail
-npm run test:kiri          # 95 tests, mock adapter, HTTP boundary and cleanup
+npm run test:unit          # 244 pass / 0 fail
+npm run test:kiri          # 109 tests, mock adapter, HTTP boundary and cleanup
 npm run test:browser       # 26/26 existing marketplace acceptance
-npm run test:kiri:browser  # 16/16 mock browser checks, screenshots in var/kiri-qa
+npm run test:kiri:browser  # 20/20 mock browser checks, screenshots in var/kiri-qa
 npm run scan:mock          # http://127.0.0.1:8787/jual/pindai
 npm run scan:serve         # live if KIRI_API_KEY is set
 node scripts/lihatdulu-doctor.mjs --scan
@@ -206,7 +224,7 @@ reconstruction never did.
 | 4 | `t15` take | off | `070ec2f5216d477484a633baf3c98779` | 585 125 | 9.50 m | room soup |
 | 5 | 101 stills from `golden` | on | `0d884d60ba4d4c578a9fa22bb83dea87` | 212 144 | 4.58 m | melted chair blob |
 | 6 | 101 stills from `golden` | off | `08929a636d77431c9ec5fab3c287622c` | 681 844 | 10.97 m | coloured room smear |
-| 7 | 101 stills, featureless mesh | on | `b3217f601ab1485591c33bbea6951f3c` | — | — | submitted, last route |
+| 7 | 101 stills, featureless mesh | on | `b3217f601ab1485591c33bbea6951f3c` | GLB, 815 094 triangles | 5.65 m | **usable chair** |
 
 Measured, on the same machine and lease: video jobs took 24–27 min from submit
 to ready; stills jobs 13–21 min, of which ~93 s was the 101-image upload and
@@ -220,7 +238,22 @@ same real conversion path, so the sheets compare like with like:
 `var/kiri-overnight/20261122-EVIDENCE.jpg` (input frame, four video results, two
 stills results, four subject-crop radii).
 
-**Verdict: still failing, and not because of the adapter.** The input frames are
+### The mesh route is the one that worked
+
+The seventh job asked for the documented textureless-object path instead of
+splats: 101 stills sampled from the same golden clip, `fileFormat=GLB`. It
+returned 36 min later as a 30.6 MB ZIP holding `3DModel.glb` (89 582 948 B,
+815 094 triangles, 2 444 663 vertices, one JPEG texture) and `cameras.json`.
+
+Rendered through the real viewer at matched poses it is a chair: backrest with
+mesh texture, both arms, seat, gas lift and a five-star base with casters
+(`docs/handoff/assets/kiri-mesh-chair.jpg`). It is a room-scale shell — 3.18 ×
+5.65 × 5.52 m — so the viewer frames the whole box and the walls appear at the
+front and back; the model is an open shell, so the viewer must force
+`THREE.DoubleSide` or the front faces vanish. Those two facts are the reason the
+GLB branch exists rather than reusing the splat camera maths untouched.
+
+**Verdict on the splat routes: still failing, and not because of the adapter.** The input frames are
 sharp and the chair fills 60–70 % of them
 (`var/kiri-overnight/scratch/frames-golden-sheet.jpg`), so framing and lighting
 are not the defect. KIRI turns a black mesh chair with glossy chrome into a
@@ -243,16 +276,21 @@ default and is documented as a framing experiment, not a quality fix.
 
 ## Repeating the live test
 
-Each run spends **one credit**. Use a different clip, or the ready job is reused
-by the hash dedupe instead of submitting:
+Each run spends **one credit**, and one mesh job costs one credit too. Ask for
+the mesh profile — it is the only one of the seven routes that produced a usable
+object:
 
 ```sh
 cd C:/Users/fauzi/OneDrive/Documents/GitHub/Lihatdulu-kiri-scan
 printf 'KIRI_API_KEY=%s
 ' 'PASTE_KEY_HERE' > .env
 npm run build
-KIRI_MOCK=0 npm run scan:serve
+KIRI_MOCK=0 KIRI_INPUT=mesh npm run scan:serve
 ```
+
+Use a different clip, or the ready job is reused by the hash dedupe instead of
+submitting. `KIRI_INPUT=mesh` needs `ffmpeg` on `PATH`; without it the job falls
+back to the video upload and you get splats, not a mesh.
 
 Open `http://127.0.0.1:8787/jual/pindai`, choose one MP4, confirm the cloud
 notice, and wait for **Siap dilihat**. Then open `/pindai/:id` and drag to orbit.

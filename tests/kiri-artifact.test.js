@@ -7,6 +7,8 @@ import {
   buildConvertArgs,
   convertPlyToSpz,
   parsePlyHeader,
+  readGlbJson,
+  validateGlb,
   validateSplatPly,
   validateSpz,
 } from "../server/kiri-artifact.mjs";
@@ -109,4 +111,40 @@ test("a synthetic chair PLY converts to a readable SPZ", async (t) => {
   const artifact = validateSpz(spz);
   assert.equal(artifact.splatCount, 21600);
   assert.ok(artifact.bytes > 0);
+});
+
+test("validateGlb accepts KIRI's mesh shape and counts triangles", async () => {
+  const { syntheticChairGlb } = await import("../server/kiri-mock.mjs");
+  const glb = syntheticChairGlb();
+  const artifact = validateGlb(glb);
+  assert.equal(artifact.bytes, glb.length);
+  // Six boxes: seat, backrest and four legs, twelve triangles each.
+  assert.equal(artifact.triangles, 72);
+  assert.equal(artifact.meshes, 1);
+  assert.equal(artifact.generator, "LihatDulu mock");
+});
+
+test("validateGlb refuses a truncated or non-GLB artifact", async () => {
+  const { syntheticChairGlb } = await import("../server/kiri-mock.mjs");
+  const glb = syntheticChairGlb();
+  assert.throws(
+    () => validateGlb(glb.subarray(0, glb.length - 8)),
+    (error) => error.code === "model_invalid",
+  );
+  assert.throws(
+    () => validateGlb(Buffer.from("ply\nformat binary_little_endian 1.0\n")),
+    (error) => error.code === "model_invalid",
+  );
+  assert.throws(
+    () => validateGlb(Buffer.alloc(0)),
+    (error) => error.code === "model_invalid",
+  );
+});
+
+test("validateGlb caps the served mesh size", async () => {
+  const { syntheticChairGlb } = await import("../server/kiri-mock.mjs");
+  assert.throws(
+    () => validateGlb(syntheticChairGlb(), { maxBytes: 32 }),
+    (error) => error.code === "artifact_too_large",
+  );
 });

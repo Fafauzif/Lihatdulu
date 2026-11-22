@@ -152,6 +152,72 @@ export function validateSpz(
   return { version, splatCount, bytes: buffer.length };
 }
 
+// GLB is the mesh path's artifact: a 12-byte header, a JSON chunk and a binary
+// chunk. KIRI's mesh export is a single 89 MB file, so validation reads only the
+// header and the JSON chunk and never copies the buffer.
+const GLB_MAGIC = 0x46546c67;
+const GLB_JSON = 0x4e4f534a;
+
+export function readGlbJson(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 20)
+    throw new KiriError("model_invalid", { detail: "Berkas GLB terlalu kecil." });
+  if (buffer.readUInt32LE(0) !== GLB_MAGIC)
+    throw new KiriError("model_invalid", { detail: "Magic GLB tidak ditemukan." });
+  const version = buffer.readUInt32LE(4);
+  if (version !== 2)
+    throw new KiriError("model_invalid", { detail: `Versi GLB ${version} tidak dikenal.` });
+  const declared = buffer.readUInt32LE(8);
+  if (declared > buffer.length)
+    throw new KiriError("model_invalid", {
+      detail: `GLB terpotong: ${buffer.length} dari ${declared} byte.`,
+    });
+  const chunkLength = buffer.readUInt32LE(12);
+  if (buffer.readUInt32LE(16) !== GLB_JSON)
+    throw new KiriError("model_invalid", { detail: "Chunk JSON GLB tidak ditemukan." });
+  if (20 + chunkLength > buffer.length)
+    throw new KiriError("model_invalid", { detail: "Chunk JSON GLB terpotong." });
+  let json;
+  try {
+    json = JSON.parse(buffer.toString("utf8", 20, 20 + chunkLength));
+  } catch (error) {
+    throw new KiriError("model_invalid", {
+      cause: error,
+      detail: "Chunk JSON GLB tidak bisa dibaca.",
+    });
+  }
+  return { version, declared, json };
+}
+
+export function validateGlb(buffer, { maxBytes = 240 * 1024 * 1024 } = {}) {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0)
+    throw new KiriError("model_invalid", { detail: "GLB kosong." });
+  if (buffer.length > maxBytes)
+    throw new KiriError("artifact_too_large", {
+      detail: `GLB ${buffer.length} byte melebihi batas.`,
+    });
+  const { json } = readGlbJson(buffer);
+  let triangles = 0;
+  let primitives = 0;
+  for (const mesh of json.meshes ?? []) {
+    for (const primitive of mesh.primitives ?? []) {
+      primitives += 1;
+      const indices = json.accessors?.[primitive.indices];
+      const position = json.accessors?.[primitive.attributes?.POSITION];
+      if (indices?.count) triangles += indices.count / 3;
+      else if (position?.count) triangles += position.count / 3;
+    }
+  }
+  if (!primitives || !triangles)
+    throw new KiriError("model_invalid", { detail: "GLB tidak berisi segitiga." });
+  return {
+    bytes: buffer.length,
+    triangles: Math.round(triangles),
+    meshes: (json.meshes ?? []).length,
+    textures: (json.images ?? []).length,
+    generator: json.asset?.generator ?? null,
+  };
+}
+
 export function buildConvertArgs({ inputPly, outputSpz }) {
   return [inputPly, "--filter-nan", outputSpz];
 }

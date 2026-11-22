@@ -56,6 +56,8 @@ export const ERROR_COPY = Object.freeze({
   zip_invalid: "Berkas hasil dari KIRI tidak bisa dibaca. Coba proses ulang.",
   ply_invalid: "Hasil KIRI bukan berkas splat 3D yang dikenali. Rekam ulang barangnya.",
   ply_empty: "Hasil KIRI tidak berisi titik splat. Rekam ulang barangnya.",
+  model_invalid:
+    "Hasil KIRI bukan berkas model 3D (GLB) yang dikenali. Rekam ulang barangnya.",
   convert_failed: "Konversi ke SPZ gagal di server. Coba proses ulang.",
   spz_invalid: "Berkas SPZ hasil konversi rusak. Coba proses ulang.",
   artifact_too_large: "Hasil 3D terlalu besar untuk dibuka di ponsel.",

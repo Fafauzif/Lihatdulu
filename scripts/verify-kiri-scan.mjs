@@ -37,6 +37,12 @@ await fs.mkdir(runDir, { recursive: true });
 const variantClip = path.join(runDir, "sora-walkthrough-variant.mp4");
 await fs.copyFile(clip, variantClip);
 await fs.appendFile(variantClip, Buffer.from("\nLihatDulu mock failure variant\n"));
+// A third distinct copy for the mesh phase. The jobs root survives the server
+// restart, so re-uploading the same bytes would dedupe into the ready SPZ job
+// instead of exercising the GLB path.
+const meshClip = path.join(runDir, "sora-walkthrough-mesh.mp4");
+await fs.copyFile(clip, meshClip);
+await fs.appendFile(meshClip, Buffer.from("\nLihatDulu mock mesh variant\n"));
 for (const file of ["index.html"]) {
   await fs.access(path.join(distDir, file)).catch(() => {
     throw new Error("dist is missing. Run npm run build before this check.");
@@ -60,7 +66,7 @@ const base = `http://127.0.0.1:${port}`;
 let serverProcess = null;
 let serverLog = "";
 
-function spawnServer({ fail = "" } = {}) {
+function spawnServer({ fail = "", input = "video" } = {}) {
   const child = spawn(process.execPath, [path.join(root, "server", "kiri-server.mjs")], {
     cwd: root,
     env: {
@@ -75,6 +81,7 @@ function spawnServer({ fail = "" } = {}) {
       KIRI_POLL_MIN_MS: "250",
       KIRI_POLL_MAX_MS: "900",
       KIRI_MOCK_FAIL: fail,
+      KIRI_INPUT: input,
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -496,6 +503,56 @@ async function layoutFacts(page) {
       externalRequests: report.externalRequests.length,
       consoleErrors: report.consoleErrors.length,
     };
+  });
+  await context.close();
+}
+
+// 5. The mesh profile: stills to the featureless endpoint, a GLB in the viewer.
+{
+  await stopServer();
+  await startServer({ input: "mesh" });
+  const { context, page } = await newPage();
+  await check("mesh profile builds a GLB and serves it to the viewer", async () => {
+    await open(page, "/jual/pindai");
+    await pickClip(page, meshClip);
+    await submitClip(page);
+    const state = await waitForJobEnd(page);
+    assert.equal(state.error, null);
+    await page.locator("[data-scan-open]").click();
+    await page.waitForURL(/\/pindai\/[0-9a-f-]{36}$/);
+    await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+    const triangles = await page.locator("[data-scan-viewer]").getAttribute("data-triangles");
+    assert.equal(Number(triangles), 72);
+    const details = await page.locator("[data-scan-details]").textContent();
+    assert.match(details, /Jumlah segitiga/);
+    assert.match(details, /72/);
+    assert.match(details, /Ukuran GLB/);
+    // Mock results say they are simulated rather than naming the profile, which
+    // is the honest copy; the live wording is pinned by a unit test instead.
+    assert.match(details, /Mode simulasi/);
+    const source = await page.locator("[data-scan-provider]").textContent();
+    assert.ok(source.length > 0);
+    await shot(page, "12-mesh-result");
+    return { triangles: Number(triangles), stages: state.seen };
+  });
+
+  await check("the mesh result can be orbited", async () => {
+    const result = await orbitProof(page, "13-mesh-orbit");
+    return result;
+  });
+
+  await check("the mesh result survives a reload without a new submission", async () => {
+    const before = await jobCount();
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+    assert.equal(await jobCount(), before);
+    return { jobs: before };
+  });
+
+  await check("the mesh flow raised no page errors or failed responses", async () => {
+    assert.deepEqual(report.pageErrors, []);
+    assert.deepEqual(report.failedResponses, []);
+    return { pageErrors: 0, failedResponses: 0 };
   });
   await context.close();
 }

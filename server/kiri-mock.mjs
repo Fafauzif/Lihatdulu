@@ -158,6 +158,109 @@ export function syntheticChairPly() {
   return Buffer.concat([Buffer.from(header, "ascii"), body]);
 }
 
+// A minimal but valid GLB: two boxes standing in for a chair seat and back.
+// The mesh profile has to be exercisable without credits and without KIRI, and
+// the browser check needs real geometry to orbit.
+export function syntheticChairGlb() {
+  const positions = [];
+  const normals = [];
+  const indices = [];
+  const faces = [
+    [[1, 0, 0], [[1, 0, -1], [1, 0, 1], [1, 1, 1], [1, 1, -1]]],
+    [[-1, 0, 0], [[-1, 0, 1], [-1, 0, -1], [-1, 1, -1], [-1, 1, 1]]],
+    [[0, 1, 0], [[-1, 1, 1], [1, 1, 1], [1, 1, -1], [-1, 1, -1]]],
+    [[0, -1, 0], [[-1, 0, -1], [1, 0, -1], [1, 0, 1], [-1, 0, 1]]],
+    [[0, 0, 1], [[-1, 0, 1], [1, 0, 1], [1, 1, 1], [-1, 1, 1]]],
+    [[0, 0, -1], [[1, 0, -1], [-1, 0, -1], [-1, 1, -1], [1, 1, -1]]],
+  ];
+  const box = (cx, cy, cz, sx, sy, sz) => {
+    const base = positions.length / 3;
+    for (const [normal, corners] of faces) {
+      for (const corner of corners) {
+        positions.push(
+          cx + (corner[0] * sx) / 2,
+          cy + (corner[1] * sy) / 2,
+          cz + (corner[2] * sz) / 2,
+        );
+        normals.push(...normal);
+      }
+      const offset = positions.length / 3 - 4;
+      indices.push(offset, offset + 1, offset + 2, offset, offset + 2, offset + 3);
+    }
+    return base;
+  };
+  box(0, 0.45, 0, 0.9, 0.08, 0.9);
+  box(0, 0.78, -0.41, 0.9, 0.62, 0.08);
+  for (const [x, z] of [
+    [-0.36, -0.36],
+    [0.36, -0.36],
+    [-0.36, 0.36],
+    [0.36, 0.36],
+  ])
+    box(x, 0.2, z, 0.06, 0.4, 0.06);
+
+  const position = Buffer.alloc(positions.length * 4);
+  positions.forEach((value, index) => position.writeFloatLE(value, index * 4));
+  const normal = Buffer.alloc(normals.length * 4);
+  normals.forEach((value, index) => normal.writeFloatLE(value, index * 4));
+  const index = Buffer.alloc(indices.length * 2);
+  indices.forEach((value, at) => index.writeUInt16LE(value, at * 2));
+
+  const binary = Buffer.concat([position, normal, index]);
+  const json = {
+    asset: { version: "2.0", generator: "LihatDulu mock" },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: positions.length / 3,
+        type: "VEC3",
+        min: [-1, 0, -1],
+        max: [1, 1, 1],
+      },
+      { bufferView: 1, componentType: 5126, count: normals.length / 3, type: "VEC3" },
+      { bufferView: 2, componentType: 5123, count: indices.length, type: "SCALAR" },
+    ],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: position.length },
+      { buffer: 0, byteOffset: position.length, byteLength: normal.length },
+      {
+        buffer: 0,
+        byteOffset: position.length + normal.length,
+        byteLength: index.length,
+      },
+    ],
+    buffers: [{ byteLength: binary.length }],
+  };
+  const jsonChunk = Buffer.from(JSON.stringify(json), "utf8");
+  const jsonPadded = Buffer.alloc(Math.ceil(jsonChunk.length / 4) * 4, 0x20);
+  jsonChunk.copy(jsonPadded);
+  const binaryPadded = Buffer.alloc(Math.ceil(binary.length / 4) * 4, 0);
+  binary.copy(binaryPadded);
+  const total = 12 + 8 + jsonPadded.length + 8 + binaryPadded.length;
+  const header = Buffer.alloc(12);
+  header.writeUInt32LE(0x46546c67, 0);
+  header.writeUInt32LE(2, 4);
+  header.writeUInt32LE(total, 8);
+  const jsonHeader = Buffer.alloc(8);
+  jsonHeader.writeUInt32LE(jsonPadded.length, 0);
+  jsonHeader.writeUInt32LE(0x4e4f534a, 4);
+  const binaryHeader = Buffer.alloc(8);
+  binaryHeader.writeUInt32LE(binaryPadded.length, 0);
+  binaryHeader.writeUInt32LE(0x004e4942, 4);
+  return Buffer.concat([
+    header,
+    jsonHeader,
+    jsonPadded,
+    binaryHeader,
+    binaryPadded,
+  ]);
+}
+
 async function readState(jobDir) {
   try {
     return JSON.parse(await readFile(`${jobDir}/mock.json`, "utf8"));
@@ -212,6 +315,23 @@ export function createMockClient({
       return { serial, calculateType: 3 };
     },
 
+    // Mesh profile stand-in: the same stills, recorded as a mesh job so the
+    // download hands back a GLB instead of a splat cloud.
+    async submitFeaturelessImages({ files = [], jobDir } = {}) {
+      if (await shouldFail("submit"))
+        throw new KiriError("kiri_unavailable", {
+          detail: "Kegagalan simulasi saat mengunggah.",
+        });
+      const serial = `mock-mesh-${String(files.length).padStart(4, "0")}`;
+      await writeState(jobDir, {
+        serial,
+        mode: "mesh",
+        createdAt: new Date(now()).toISOString(),
+        failMode,
+      });
+      return { serial, calculateType: 2 };
+    },
+
     async getStatus(serial, { jobDir } = {}) {
       const state = (await readState(jobDir)) ?? {
         serial,
@@ -225,15 +345,28 @@ export function createMockClient({
       return { status: 2, state: "successful" };
     },
 
-    async downloadZip(serial, destination) {
+    async downloadZip(serial, destination, { jobDir } = {}) {
       if (await shouldFail("zip"))
         throw new KiriError("zip_invalid", {
           detail: "Kegagalan simulasi saat mengunduh ZIP.",
         });
-      const zip = zipStore([
-        { name: "mock/point_cloud.ply", data: syntheticChairPly() },
-        { name: "mock/readme.txt", data: Buffer.from("Mode simulasi LihatDulu.\n") },
-      ]);
+      const state = jobDir ? await readState(jobDir) : null;
+      // A mesh job stands in for KIRI's featureless export: one GLB plus the
+      // camera set, exactly the shape the live ZIP has.
+      const zip = zipStore(
+        state?.mode === "mesh"
+          ? [
+              { name: "3DModel.glb", data: syntheticChairGlb() },
+              {
+                name: "cameras.json",
+                data: Buffer.from(JSON.stringify({ cameras: [] }), "utf8"),
+              },
+            ]
+          : [
+              { name: "mock/point_cloud.ply", data: syntheticChairPly() },
+              { name: "mock/readme.txt", data: Buffer.from("Mode simulasi LihatDulu.\n") },
+            ],
+      );
       await mkdir(dirname(destination), { recursive: true });
       await writeFile(destination, zip);
       return { bytes: zip.length };

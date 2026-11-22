@@ -65,6 +65,7 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
         if (state.disposed) return;
         state.viewer = module.mountScanViewer(viewerHost, {
           url: dto.artifact.url,
+          format: dto.artifact.format,
           onStatus: (message, tone = "") => {
             if (!message) return;
             placeholder.hidden = false;
@@ -97,7 +98,16 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
       details.innerHTML = detailRows(dto)
         .map(([term, value]) => `<dt>${term}</dt><dd>${value}</dd>`)
         .join("");
-      facts.textContent = `${Number(dto.artifact?.splatCount ?? 0).toLocaleString("id-ID")} splat · ${formatBytes(dto.artifact?.bytes)} · diproses ${formatDuration(Math.round((dto.timings?.totalMs ?? 0) / 1000))}`;
+      // A mesh has triangles, a splat cloud has points; say which one this is
+      // instead of printing "0 splat" for a GLB.
+      const parts =
+        dto.artifact?.format === "glb"
+          ? [
+              `${Number(dto.artifact?.triangles ?? 0).toLocaleString("id-ID")} segitiga`,
+              "mesh",
+            ]
+          : [`${Number(dto.artifact?.splatCount ?? 0).toLocaleString("id-ID")} splat`];
+      facts.textContent = `${parts.join(" · ")} · ${formatBytes(dto.artifact?.bytes)} · diproses ${formatDuration(Math.round((dto.timings?.totalMs ?? 0) / 1000))}`;
       mountViewer(dto);
       placeholder.hidden = viewerHost.dataset.state === "ready";
       return;

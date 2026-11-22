@@ -12,7 +12,16 @@ import { buildZip } from "./helpers/zip-fixture.mjs";
 
 async function setup(
   t,
-  { failMode = "", failOnce = false, latencyMs = 40, convert, stripBackdrop, env = {} } = {},
+  {
+    failMode = "",
+    failOnce = false,
+    latencyMs = 40,
+    convert,
+    stripBackdrop,
+    extractModel,
+    frames,
+    env = {},
+  } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "lihatdulu-service-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -34,6 +43,8 @@ async function setup(
     client,
     ...(convert ? { convert } : {}),
     ...(stripBackdrop ? { stripBackdrop } : {}),
+    ...(extractModel ? { extractModel } : {}),
+    ...(frames ? { frames } : {}),
   });
   t.after(() => service.stop());
   const upload = async (name = "kursi.mp4", hash = `hash-${name}`) => {
@@ -460,4 +471,136 @@ test("the default profile still uploads the video itself", async (t) => {
   assert.equal(calls.images, 0);
   assert.equal(calls.extract, 0);
   assert.equal((await readJob(jobsRoot, job.id)).input.mode, "video");
+});
+
+// --- KIRI mesh profile -----------------------------------------------------
+
+// The mesh profile needs ffmpeg; the unit tests stand in a fixed still list so
+// they never depend on the host's encoder.
+function stillFrames(count = 24) {
+  return {
+    async extract({ directory }) {
+      return Array.from({ length: count }, (_, index) => ({
+        path: join(directory, `frame-${String(index + 1).padStart(4, "0")}.jpg`),
+        filename: `frame-${String(index + 1).padStart(4, "0")}.jpg`,
+      }));
+    },
+  };
+}
+
+test("mesh profile sends stills to the featureless endpoint and keeps the GLB", async (t) => {
+  const { root, service, upload, config } = await setup(t, {
+    env: { KIRI_INPUT: "mesh" },
+    frames: stillFrames(),
+  });
+  assert.equal(config.input.mode, "mesh");
+  const { job } = await upload();
+  const submitted = await readJob(root, job.id);
+  assert.equal(submitted.input.mode, "mesh");
+  assert.equal(submitted.input.photos, 24);
+  assert.equal(submitted.input.fileFormat, "GLB");
+  assert.match(submitted.kiri.serial, /^mock-mesh-/);
+
+  await service.finalize(submitted);
+  const ready = await readJob(root, job.id);
+  assert.equal(ready.stage, "ready");
+  assert.equal(ready.artifact.format, "glb");
+  assert.equal(ready.artifact.file, "result.glb");
+  assert.equal(ready.artifact.triangles, 72);
+  assert.ok(ready.artifact.bytes > 0);
+  assert.equal(ready.artifact.splatCount, undefined);
+  // No splat work happened: no PLY, no SPZ, no crop.
+  const files = await readdir(join(root, "jobs", job.id));
+  assert.ok(files.includes("result.glb"));
+  assert.equal(files.includes("result.spz"), false);
+  assert.equal(files.includes("result.ply"), false);
+  assert.equal(files.includes("result.zip"), false);
+  assert.equal(ready.crop, null);
+});
+
+test("the DTO a mesh job serves points the viewer at result.glb", async (t) => {
+  const { root, service, upload } = await setup(t, {
+    env: { KIRI_INPUT: "mesh" },
+    frames: stillFrames(),
+  });
+  const { job } = await upload();
+  await service.finalize(await readJob(root, job.id));
+  const dto = service.dto(await readJob(root, job.id));
+  assert.equal(dto.artifact.format, "glb");
+  assert.equal(dto.artifact.url, `/api/kiri/jobs/${job.id}/result.glb`);
+  assert.equal(dto.artifact.triangles, 72);
+  assert.equal(dto.artifact.splatCount, null);
+});
+
+test("a mesh ZIP without a GLB fails with model_invalid", async (t) => {
+  const { root, service, upload } = await setup(t, {
+    env: { KIRI_INPUT: "mesh" },
+    frames: stillFrames(),
+    extractModel: () => {
+      throw new KiriError("zip_invalid", { detail: "ZIP tidak berisi berkas .glb." });
+    },
+  });
+  const { job } = await upload();
+  await service.finalize(await readJob(root, job.id));
+  const failed = await readJob(root, job.id);
+  assert.equal(failed.stage, "failed");
+  assert.equal(failed.error.code, "zip_invalid");
+  // The serial is known, so the seller may retry the download without a re-shoot.
+  assert.equal(failed.error.retryable, true);
+});
+
+test("mesh profile falls back to the video upload when stills cannot be made", async (t) => {
+  const jobsRoot = await mkdtemp(join(tmpdir(), "lihatdulu-mesh-fallback-"));
+  t.after(() => rm(jobsRoot, { recursive: true, force: true }));
+  const calls = { video: 0, mesh: 0, images: 0 };
+  const config = readKiriConfig(
+    {
+      KIRI_API_KEY: "kiri-test-key",
+      KIRI_JOBS_ROOT: jobsRoot,
+      KIRI_INPUT: "mesh",
+      KIRI_POLL_MIN_MS: "600000",
+      KIRI_POLL_MAX_MS: "600000",
+    },
+    process.cwd(),
+  );
+  const client = {
+    provider: "kiri",
+    async submitVideo() {
+      calls.video += 1;
+      return { serial: "videoserial1234" };
+    },
+    async submitImages() {
+      calls.images += 1;
+      return { serial: "photoserial12345" };
+    },
+    async submitFeaturelessImages() {
+      calls.mesh += 1;
+      return { serial: "meshserial1234" };
+    },
+    async getStatus() {
+      return { status: 3, state: "queuing" };
+    },
+    async downloadZip() {},
+  };
+  const frames = {
+    async extract() {
+      throw new KiriError("kiri_unavailable", { detail: "ffmpeg tidak ada di PATH" });
+    },
+  };
+  const service = createKiriService({ config, client, frames });
+  t.after(() => service.stop());
+  const temp = join(jobsRoot, "kursi.mp4");
+  await writeFile(temp, Buffer.alloc(64, 1));
+  const { job } = await service.submit({
+    tempPath: temp,
+    filename: "kursi.mp4",
+    bytes: 64,
+    videoHash: "hash-mesh",
+  });
+  assert.equal(calls.mesh, 0);
+  assert.equal(calls.video, 1);
+  const stored = await readJob(jobsRoot, job.id);
+  assert.equal(stored.input.mode, "video");
+  assert.equal(stored.input.fallback, "kiri_unavailable");
+  assert.equal(stored.kiri.serial, "videoserial1234");
 });

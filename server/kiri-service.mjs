@@ -2,10 +2,16 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   convertPlyToSpz as defaultConvert,
+  validateGlb as defaultValidateGlb,
   validateSplatPly as defaultValidatePly,
   validateSpz as defaultValidateSpz,
 } from "./kiri-artifact.mjs";
-import { extractSplat as defaultExtract, listZipEntries, readZipEntry } from "./zip.mjs";
+import {
+  extractModel as defaultExtractModel,
+  extractSplat as defaultExtract,
+  listZipEntries,
+  readZipEntry,
+} from "./zip.mjs";
 import {
   cropToSubject,
   orbitCenter,
@@ -50,9 +56,11 @@ export function createKiriService({
   now = () => Date.now(),
   convert = defaultConvert,
   extract = defaultExtract,
+  extractModel = defaultExtractModel,
   stripBackdrop = defaultStripBackdrop,
   validatePly = defaultValidatePly,
   validateSpz = defaultValidateSpz,
+  validateGlb = defaultValidateGlb,
   readFileImpl = readFile,
   frames = createFrameExtractor(),
   log = () => {},
@@ -232,9 +240,50 @@ export function createKiriService({
     try {
       const download = await client.downloadZip(job.kiri.serial, paths.zip, {
         maxBytes: config.limits.maxZipBytes,
+        jobDir: paths.dir,
       });
       await updateJob(jobsRoot, job.id, { stage: "converting" });
       const zip = await readFileImpl(paths.zip);
+      // The mesh profile returns a GLB and no splats: there is nothing to
+      // convert, so the validated model is written and served as-is.
+      if (job.input?.mode === "mesh") {
+        const { name, data } = extractModel(zip, {
+          maxBytes: config.limits.maxModelBytes,
+        });
+        const model = validateGlb(data, {
+          maxBytes: config.limits.maxModelBytes,
+        });
+        await writeFile(paths.model, data);
+        const updated = await updateJob(jobsRoot, job.id, {
+          stage: "ready",
+          error: null,
+          completedAt: new Date(now()).toISOString(),
+          artifact: {
+            format: "glb",
+            file: "result.glb",
+            bytes: model.bytes,
+            triangles: model.triangles,
+            sourceEntry: name,
+          },
+          cleanup: null,
+          crop: null,
+          timings: {
+            ...job.timings,
+            downloadMs: now() - started,
+            convertMs: 0,
+            finalizeMs: now() - started,
+          },
+        });
+        await cleanupTransient(paths);
+        logEvent("job_ready", {
+          id: job.id,
+          format: "glb",
+          bytes: model.bytes,
+          triangles: model.triangles,
+          mock: config.mode === "mock",
+        });
+        return updated;
+      }
       const { data } = extract(zip, { maxBytes: config.limits.maxPlyBytes });
       validatePly(data, {
         maxBytes: config.limits.maxPlyBytes,
@@ -301,6 +350,7 @@ export function createKiriService({
     }
   }
 
+  // The GLB is an artifact, not a working file, so it is never removed here.
   async function cleanupTransient(paths) {
     for (const path of [paths.zip, paths.ply])
       await rm(path, { force: true }).catch(() => {});
@@ -350,10 +400,16 @@ export function createKiriService({
     // asks for it the clip is sampled first and the stills are sent instead.
     const photoMode =
       config.input?.mode === "photo" && typeof client.submitImages === "function";
+    // The mesh profile needs stills too, but from the featureless-object
+    // endpoint. A client without that method falls back to the plain video job.
+    const meshMode =
+      config.input?.mode === "mesh" &&
+      typeof client.submitFeaturelessImages === "function";
+    const stillsMode = photoMode || meshMode;
     const framesDir = join(jobDir, "frames");
     let stills = null;
     let input = { mode: "video" };
-    if (photoMode) {
+    if (stillsMode) {
       try {
         stills = await frames.extract({
           videoPath: tempPath,
@@ -361,7 +417,11 @@ export function createKiriService({
           fps: config.input.fps,
           count: config.input.photos,
         });
-        input = { mode: "photo", photos: stills.length };
+        input = {
+          mode: meshMode ? "mesh" : "photo",
+          photos: stills.length,
+          ...(meshMode ? { fileFormat: "GLB" } : {}),
+        };
       } catch (error) {
         // A missing ffmpeg or a clip too short for 20 stills is not a dead end:
         // the video upload is still a valid KIRI job.
@@ -372,7 +432,13 @@ export function createKiriService({
     }
     try {
       const result = stills
-        ? await client.submitImages({ files: stills, mask: config.isMask })
+        ? meshMode
+          ? await client.submitFeaturelessImages({
+              files: stills,
+              fileFormat: config.input.fileFormat ?? "GLB",
+              jobDir,
+            })
+          : await client.submitImages({ files: stills, mask: config.isMask })
         : await client.submitVideo({ filePath: tempPath, filename, jobDir });
       job = await updateJob(jobsRoot, job.id, {
         stage: "queued",
@@ -394,7 +460,7 @@ export function createKiriService({
       await fail(job, toKiriError(error));
       job = await readJob(jobsRoot, job.id);
     } finally {
-      if (photoMode)
+      if (stillsMode)
         await rm(framesDir, { recursive: true, force: true }).catch(() => {});
       await rm(tempPath, { force: true }).catch(() => {});
     }

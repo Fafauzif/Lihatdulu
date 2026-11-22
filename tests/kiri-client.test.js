@@ -90,6 +90,56 @@ test("submitImages refuses an empty photo set without calling KIRI", async () =>
   });
 });
 
+test("submitFeaturelessImages asks the mesh endpoint for a GLB", async (t) => {
+  const first = await tempVideo(t);
+  const second = await tempVideo(t);
+  let seen;
+  const client = createKiriClient({
+    apiKey: "kiri-secret",
+    fetchImpl: async (url, options) => {
+      seen = { url, options };
+      return jsonResponse({
+        code: 0,
+        msg: "success",
+        data: { serialize: "meshserial1234", calculateType: 2 },
+        ok: true,
+      });
+    },
+  });
+  const result = await client.submitFeaturelessImages({
+    files: [
+      { path: first, filename: "0001.jpg" },
+      { path: second, filename: "0002.jpg" },
+    ],
+  });
+  assert.equal(result.serial, "meshserial1234");
+  assert.equal(result.calculateType, 2);
+  assert.match(seen.url, /\/v1\/open\/featureless\/image$/);
+  assert.equal(seen.options.method, "POST");
+  assert.equal(seen.options.headers.authorization, "Bearer kiri-secret");
+  assert.equal(seen.options.body.get("fileFormat"), "GLB");
+  // The featureless endpoint takes stills only: no isMask/isMesh flags.
+  assert.equal(seen.options.body.get("isMask"), null);
+  assert.equal(seen.options.body.get("isMesh"), null);
+  assert.deepEqual(
+    seen.options.body.getAll("imagesFiles").map((file) => file.name),
+    ["0001.jpg", "0002.jpg"],
+  );
+});
+
+test("submitFeaturelessImages refuses an empty set without calling KIRI", async () => {
+  const client = createKiriClient({
+    apiKey: "k",
+    fetchImpl: async () => {
+      throw new Error("must not fetch");
+    },
+  });
+  await assert.rejects(
+    client.submitFeaturelessImages({ files: [] }),
+    (error) => error.code === "kiri_unavailable",
+  );
+});
+
 test("getStatus maps every documented KIRI status", async () => {
   const states = [];
   for (const status of [-1, 0, 1, 2, 3, 4]) {

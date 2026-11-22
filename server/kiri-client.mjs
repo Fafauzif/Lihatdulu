@@ -192,6 +192,41 @@ export function createKiriClient({
       };
     },
 
+    // Featureless-object route: same stills, but calculated as one object with a
+    // mesh artifact instead of splats. Docs: POST /v1/open/featureless/image,
+    // multipart `imagesFiles` plus `fileFormat` (GLB here).
+    async submitFeaturelessImages({ files = [], fileFormat = "GLB" } = {}) {
+      if (!Array.isArray(files) || files.length === 0)
+        throw new KiriError("kiri_unavailable", { detail: "Foto kosong." });
+      const form = new FormData();
+      form.append("fileFormat", fileFormat);
+      for (const file of files)
+        form.append(
+          "imagesFiles",
+          await videoBlob(file.path),
+          file.filename ?? "frame.jpg",
+        );
+      const payload = await request("/v1/open/featureless/image", {
+        method: "POST",
+        body: form,
+        timeoutMs: uploadTimeoutMs,
+      });
+      if (process.env.KIRI_DEBUG === "1")
+        console.error(
+          "submit-featureless-response",
+          JSON.stringify(Object.keys(payload ?? {})),
+        );
+      const serial = payload?.data?.serialize;
+      if (typeof serial !== "string" || !SERIAL.test(serial))
+        throw new KiriError("kiri_unavailable", {
+          detail: "Respons unggah mesh tanpa serial.",
+        });
+      return {
+        serial,
+        calculateType: Number(payload?.data?.calculateType ?? 0) || null,
+      };
+    },
+
     async getStatus(serial) {
       const payload = await request(
         `/v1/open/model/getStatus?serialize=${encodeURIComponent(assertSerial(serial))}`,

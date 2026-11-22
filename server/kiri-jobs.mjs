@@ -42,6 +42,7 @@ export function jobPaths(jobsRoot, id) {
     source: join(dir, "source.mp4"),
     zip: join(dir, "result.zip"),
     ply: join(dir, "result.ply"),
+    model: join(dir, "result.glb"),
     artifact: join(dir, "result.spz"),
   };
 }
@@ -171,8 +172,14 @@ export async function pruneJobs(jobsRoot, keep = 50) {
   return removable.length;
 }
 
-export function artifactUrl(id) {
-  return `/api/kiri/jobs/${id}/result.spz`;
+// The file name carries the format, because a mesh job serves a GLB and a splat
+// job serves an SPZ. `format` is always the artifact's own value.
+export function artifactUrl(id, format = "spz") {
+  return `/api/kiri/jobs/${id}/result.${format === "glb" ? "glb" : "spz"}`;
+}
+
+export function artifactFile(format) {
+  return format === "glb" ? "result.glb" : "result.spz";
 }
 
 // The DTO is everything the browser may know. The API key, the local paths and
@@ -212,8 +219,9 @@ export function toJobDto(job, { mock = false, now = Date.now(), ttlMs = 0 } = {}
       ? {
           format: job.artifact.format,
           bytes: job.artifact.bytes,
-          splatCount: job.artifact.splatCount,
-          url: artifactUrl(job.id),
+          splatCount: job.artifact.splatCount ?? null,
+          triangles: job.artifact.triangles ?? null,
+          url: artifactUrl(job.id, job.artifact.format),
         }
       : null,
     error: job.error

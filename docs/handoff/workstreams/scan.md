@@ -2,12 +2,15 @@
 
 ## Current direction
 
-LihatDulu does not reconstruct on a laptop anymore. The server submits a video to
-[KIRI Engine](https://docs.kiriengine.app/), gets a 3DGS result back, validates
-and converts it, and serves the SPZ from storage we control. The browser flow is
-**upload-only** for now: choose an existing MP4, preview it, confirm the cloud
-send, watch the stages, then orbit the saved result. In-browser camera capture
-comes only after one real clip has passed end-to-end.
+LihatDulu does not reconstruct on a laptop anymore. The server samples a few
+dozen stills from the seller's clip, sends them to
+[KIRI Engine](https://docs.kiriengine.app/), validates the returned artifact and
+serves it from storage we control. Two artifacts are supported: an SPZ splat
+cloud from the 3DGS routes, and a GLB mesh from the featureless-object route
+(`KIRI_INPUT=mesh`), which is the one that produced a recognizable chair. The
+browser flow is **upload-only** for now: choose an existing MP4, preview it,
+confirm the cloud send, watch the stages, then orbit the saved result.
+In-browser camera capture comes only after one real clip has passed end-to-end.
 
 Detailed architecture, configuration and the live-test command:
 [kiri-scan.md](../kiri-scan.md).
@@ -24,9 +27,10 @@ in [scan-toolchain.md](../scan-toolchain.md), marked historical.
 ## What is in the tree
 
 - `/jual/pindai` upload + preview + consent + stages.
-- `/pindai/:id` resumable result page with the existing SparkJS viewer.
-- `server/kiri-*` adapter (live + labelled mock), ZIP/PLY validation, pinned
-  conversion, disk-backed jobs, dedupe and retry.
+- `/pindai/:id` resumable result page: SparkJS for SPZ, `GLTFLoader` +
+  `OrbitControls` for a GLB mesh.
+- `server/kiri-*` adapter (live + labelled mock), ZIP/PLY/GLB validation, pinned
+  conversion for splats, disk-backed jobs, dedupe and retry.
 - `npm run scan:serve`, `npm run scan:mock`, `npm run test:kiri`,
   `npm run test:kiri:browser`.
 - No COLMAP, Brush, CUDA or FFmpeg references in the active path.
@@ -52,23 +56,31 @@ Proven against the real KIRI API (one paid job, 22 November 2026):
   same job without resubmitting.
 - Total submit → ready was 37 min 54 s. Evidence: `var/kiri-live/report.json`.
 
+Proven against the real KIRI API (overnight matrix, 22–23 November 2026, seven
+of eight credits):
+
+- **`KIRI_INPUT=mesh` produces a usable chair** from 101 stills of the golden
+  clip: 815 094 triangles, one texture, 36 min, serial
+  `b3217f601ab1485591c33bbea6951f3c`. Contact sheet:
+  `docs/handoff/assets/kiri-mesh-chair.jpg`.
+- The same clip through the 3DGS video and photo routes does not: room soup at
+  9.5–11 m, or a melted blob.
+
 Still unproven:
 
-- **Model quality.** The export's synthetic backdrop has been removed, but the
-  remaining reconstruction is a dark hollow shell, not a recognizable chair. The
-  viewer path is fine; the model fails the visual gate.
-- Whether another clip, masking off, or tighter capture guidance produces a
-  usable model within one or two more credits.
+- The mesh is room-scale, so the room shell frames the result and the front view
+  is a lit wall. A mesh-side subject crop is not implemented.
+- Whether the mesh profile generalises to a second clip, and what it costs on a
+  longer capture.
 - KIRI key handling on the actual demo host, credit budget and retention.
 - Phone/browser and network behaviour for a real seller.
 - The in-browser camera path, deliberately deferred.
 
 ## Next step
 
-Fix quality before adding features. Each candidate costs one credit, so choose
-deliberately: resubmit the same clip with `isMask=0`, or use a different kept
-clip (for example `VID_20261121_184349140.mp4`, 20 s), then compare the four
-matched poses against the earlier Golden reference renders. The repeat command
-and what is already recorded are in
+One credit is left. Spend it on the mesh profile with a second clip
+(`KIRI_MOCK=0 KIRI_INPUT=mesh npm run scan:serve`) to see whether the chair
+result generalises, then decide between a mesh subject crop and capture
+guidance. The repeat command and recorded numbers are in
 [kiri-scan.md](../kiri-scan.md#repeating-the-live-test). Keep the camera deferred
-until one model visibly passes.
+until a second mesh model visibly passes.
