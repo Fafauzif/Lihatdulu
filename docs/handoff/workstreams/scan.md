@@ -20,11 +20,13 @@ Seller entry `/jual` → **Pindai furnitur** → rear camera and **Mulai pindai*
 - Proposed endpoints, to confirm when implementing: **POST** `/api/scans` receives a finished clip and returns a job ID; **GET** `/api/scans/:id` reports current stage or a useful retake/failure reason; **GET** `/api/scans/:id/result` serves/redirects to the validated artifact once ready. Use honest stages such as Uploading, Queued, Extracting frames, Aligning cameras, Reconstructing, Ready and Failed. Poll by ID; associate the view with the job that came from that specific capture. Handle duplicate submits, retry, interrupted worker jobs and leaving/returning.
 - Use a dedicated splat viewer and lazy-load it. Give the scan its own provenance, condition photos and manually measured dimensions. Keep GLB kinematics and room fit tied to the existing geometry. The frontend stays in the current stack. For public rollout, persistent listings/ownership, isolated job workers, private media storage and sharing can be designed after the proof.
 
-## Status 20 November 2026
+## Status 22 November 2026
 
-- The web/API half is implemented on `feat/real-furniture-scan`: `/jual/pindai` capture, automatic upload, honest job stages, `/pindai/:id` preview with SparkJS, provenance and stills, and a fake pipeline for tests.
-- The worker is implemented with the recorded COLMAP 4.2.1 and Brush 0.3.0 commands. It is validated on a public dataset and on the prepared Sora clip's honest failure, **not** on a real chair.
-- Still missing: one real 30–45 s chair clip, the Task 1 registration/timing numbers and go/no-go, a physical phone run, and the tunnel proof. Do not mark the acceptance section below as proven until those exist.
+- The web/API half and worker are implemented (merged from `feat/real-furniture-scan`): `/jual/pindai` capture, automatic upload, honest job stages, `/pindai/:id` preview with SparkJS, provenance and stills, and the FFmpeg → COLMAP 4.2.1 → Brush 0.3.0 → SPZ pipeline on one disk-backed worker.
+- **Real chair reconstruction is now proven on the Helios from camera originals.** Seven of the eight `VID_*` takes reconstruct: golden 25.35 s = 76/76 registered in 291 s, repeat 20.13 s = 60/60 in 290 s, and all five variants (10.0–15.0 s, including the 4K take downscaled to 1280) register 100 % in 244–333 s. Artifacts are 0.34–0.68 MiB SPZ. All seven opened in the in-site SparkJS viewer at 1440 and 390 px. Full table: [scan-toolchain.md](../scan-toolchain.md#real-chair-clips--22-november-2026). The 3.33 s false start was excluded and the five compressed WhatsApp copies remain archived outside the batch.
+- Verdict **Go**, with the measured recipe: 1080p rear camera, one slow 15–25 s orbit at two heights with overlapping views, side light for dark furniture, 3 fps base extraction (retry to 5–8 fps only when a VFR clip misses the 60-frame floor). Expect 4–5.5 minutes per clip on the Helios.
+- Two pipeline defects were found and fixed with RED→GREEN tests during the study: the batch passed a relative job root (COLMAP rejected the database parent path) and the worker assumed `sparse/0` even when the mapper wrote a larger sub-model (the repeat take looked like 2/60 while `sparse/1` held 60/60). A 15.00 s VFR take also exposed the extraction retry. No threshold was lowered.
+- Still missing: the physical phone → laptop → same-site preview run with no manual file transfer, the HTTPS tunnel proof, the phone viewer load time, and the phone-side failure checks. **The acceptance section below is not proven yet.**
 
 ## Acceptance before judging
 
