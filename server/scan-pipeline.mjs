@@ -198,6 +198,17 @@ export function parseRegisteredImages(text) {
   );
 }
 
+// COLMAP's mapper can split one clip into several disjoint sub-models (for
+// example a 2-image model 0 and a 60-image model 1). The largest registered
+// set is the reconstruction the rest of the pipeline must use.
+export function pickBestModel(models) {
+  let best = null;
+  for (const model of Array.isArray(models) ? models : []) {
+    if (!best || model.registered > best.registered) best = model;
+  }
+  return best;
+}
+
 export function parseSplatCount(text) {
   const match =
     /"numGaussians"\s*:\s*(\d+)/i.exec(text) ??
@@ -382,14 +393,37 @@ export async function runRealPipeline(
     buildMapperArgs({ database, images: paths.frames, sparse }),
     { cwd: paths.logs, timeoutMs: TIMEOUTS.mapper, logPath: join(paths.logs, "colmap-map.log") },
   );
-  const analyze = await tool(
-    "colmap",
-    buildAnalyzeArgs({ model: join(sparse, "0") }),
-    { cwd: paths.logs, timeoutMs: TIMEOUTS.ffprobe, logPath: join(paths.logs, "colmap-analyze.log") },
-  );
+  const analyzeModels = (await readdir(sparse, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && /^\d+$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((left, right) => Number(left) - Number(right));
+  if (analyzeModels.length === 0)
+    throw new ScanError(
+      "alignment_failed",
+      "COLMAP tidak menghasilkan model kamera. Rekam ulang dengan gerakan lebih pelan.",
+    );
+  const models = [];
+  let analyzeMs = 0;
+  for (const name of analyzeModels) {
+    const analyze = await tool(
+      "colmap",
+      buildAnalyzeArgs({ model: join(sparse, name) }),
+      {
+        cwd: paths.logs,
+        timeoutMs: TIMEOUTS.ffprobe,
+        logPath: join(paths.logs, `colmap-analyze-${name}.log`),
+      },
+    );
+    analyzeMs += analyze.ms;
+    models.push({
+      name,
+      registered: parseRegisteredImages(analyze.stdout),
+    });
+  }
   timings.alignMs =
-    feature.ms + match.ms + map.ms + analyze.ms || Date.now() - alignStarted;
-  const registered = parseRegisteredImages(analyze.stdout);
+    feature.ms + match.ms + map.ms + analyzeMs || Date.now() - alignStarted;
+  const bestModel = pickBestModel(models);
+  const registered = bestModel.registered;
   const ratio = registered / frameNames.length;
   if (registered < rules.minRegistered || ratio < rules.minRegisteredRatio)
     throw new ScanError(
@@ -400,7 +434,7 @@ export async function runRealPipeline(
   const dataset = join(paths.work, "dataset");
   await mkdir(join(dataset, "sparse"), { recursive: true });
   await cp(paths.frames, join(dataset, "images"), { recursive: true });
-  await cp(join(sparse, "0"), join(dataset, "sparse", "0"), {
+  await cp(join(sparse, bestModel.name), join(dataset, "sparse", "0"), {
     recursive: true,
   });
 

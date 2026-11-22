@@ -15,6 +15,7 @@ import {
   buildMatchArgs,
   extractionFps,
   frameFilter,
+  pickBestModel,
 } from "../server/scan-pipeline.mjs";
 
 test("buildExtractArgs uses the recorded filter and numbered output", () => {
@@ -138,5 +139,28 @@ test("buildExtractArgs uses the requested fps", () => {
   assert.deepEqual(
     buildExtractArgs({ clip: "C:\\a\\clip.mp4", framesDir: "C:\\a\\frames", fps: 5 }).slice(5, 7),
     ["-vf", "fps=5,scale=1280:-2"],
+  );
+});
+
+test("pickBestModel uses the model with the most registered images", () => {
+  assert.equal(pickBestModel([]), null);
+  assert.deepEqual(
+    pickBestModel([
+      { name: "0", registered: 2 },
+      { name: "1", registered: 60 },
+    ]),
+    { name: "1", registered: 60 },
+  );
+  assert.deepEqual(pickBestModel([{ name: "0", registered: 76 }]), {
+    name: "0",
+    registered: 76,
+  });
+  // Ties keep the first model (numeric folder order), not the last analysed.
+  assert.deepEqual(
+    pickBestModel([
+      { name: "0", registered: 12 },
+      { name: "1", registered: 12 },
+    ]),
+    { name: "0", registered: 12 },
   );
 });
