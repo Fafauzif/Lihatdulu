@@ -1,0 +1,65 @@
+[
+  {
+    "take": "Golden",
+    "splats": 27447,
+    "sh": 3,
+    "fullVs98PercentAabbDiagonal": 1.89,
+    "maxVsMedianLongestScale": 95.8,
+    "maxVsP99LongestScale": 6.1,
+    "trialRemoved": 270
+  },
+  {
+    "take": "Repeat",
+    "splats": 25181,
+    "sh": 3,
+    "fullVs98PercentAabbDiagonal": 2.25,
+    "maxVsMedianLongestScale": 179,
+    "maxVsP99LongestScale": 12.2,
+    "trialRemoved": 248
+  },
+  {
+    "take": "Variant 10.03 s",
+    "splats": 34342,
+    "sh": 3,
+    "fullVs98PercentAabbDiagonal": 2.83,
+    "maxVsMedianLongestScale": 115.6,
+    "maxVsP99LongestScale": 7.9,
+    "trialRemoved": 317
+  },
+  {
+    "take": "Variant 10.21 s",
+    "splats": 25811,
+    "sh": 3,
+    "fullVs98PercentAabbDiagonal": 2.22,
+    "maxVsMedianLongestScale": 131,
+    "maxVsP99LongestScale": 9.5,
+    "trialRemoved": 0
+  },
+  {
+    "take": "Variant 14.59 s",
+    "splats": 27466,
+    "sh": 3,
+    "fullVs98PercentAabbDiagonal": 2.45,
+    "maxVsMedianLongestScale": 202.9,
+    "maxVsP99LongestScale": 12.2,
+    "trialRemoved": 0
+  },
+  {
+    "take": "Variant 15.00 s",
+    "splats": 33284,
+    "sh": 3,
+    "fullVs98PercentAabbDiagonal": 2.26,
+    "maxVsMedianLongestScale": 131,
+    "maxVsP99LongestScale": 10.1,
+    "trialRemoved": 0
+  },
+  {
+    "take": "Variant 4K 14.62 s",
+    "splats": 18461,
+    "sh": 3,
+    "fullVs98PercentAabbDiagonal": 1.54,
+    "maxVsMedianLongestScale": 70.1,
+    "maxVsP99LongestScale": 5.4,
+    "trialRemoved": 177
+  }
+]

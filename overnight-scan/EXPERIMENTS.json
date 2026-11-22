@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "budgetHours": 6,
+  "verificationReserveMinutes": 40,
+  "policy": "Quality first. Keep the winning preset opt-in. Replay only during the overnight run. No photo-only fallback work.",
+  "inputs": {
+    "tuning": "VID_20261121_184227976.mp4",
+    "stress": "VID_20261121_184212135.mp4",
+    "confirmation": "VID_20261121_184349140.mp4"
+  },
+  "experiments": [
+    {
+      "id": "B0",
+      "change": "Re-render published artifacts with existing camera behavior. Record original dimensions and source photos.",
+      "requires": ["existing SPZ"],
+      "compareTo": [],
+      "stopCondition": "Same evidence reviewed at both viewport sizes."
+    },
+    {
+      "id": "V1",
+      "change": "Correct local-to-world centering, keep the same SPZ and original fit.",
+      "requires": ["B0"],
+      "compareTo": ["B0"],
+      "stopCondition": "Off-center synthetic fixture and same-SPZ comparison demonstrate the correction."
+    },
+    {
+      "id": "V2",
+      "change": "Evaluate robust bounds then subject-region camera framing. Implement and verify subject-centered orbit and reset.",
+      "requires": ["V1"],
+      "compareTo": ["V1"],
+      "stopCondition": "Stable full-chair fit where the existing asset supports it, with screenshots and tested interaction."
+    },
+    {
+      "id": "A1",
+      "change": "Use a no-op SPZ round trip control and a conservative large-splat removal on a copy. Hold framing and yaw constant.",
+      "requires": ["V1", "existing SPZ"],
+      "compareTo": ["unchanged artifact", "no-op round trip"],
+      "stopCondition": "Gain is visible across angles and thin chair geometry is retained. Otherwise record it as diagnosis."
+    },
+    {
+      "id": "A2",
+      "change": "If the artifact has separable background splats, test an object region or a verified floater filter on an isolated copy.",
+      "requires": ["A1", "reproducible target region or verified filter"],
+      "compareTo": ["A1"],
+      "stopCondition": "Keep only if verified against source stills and compared by an independent reviewer."
+    },
+    {
+      "id": "Q0",
+      "change": "Reproduce original training on Golden. Preserve selected aligned frames and poses inside the benchmark run.",
+      "requires": ["Golden original", "pinned local tools"],
+      "compareTo": ["B0"],
+      "stopCondition": "Baseline export and report establish actual dimensions and reusable alignment."
+    },
+    {
+      "id": "Q1",
+      "change": "Train a foreground-mask candidate after alignment with verified mask semantics. Keep input cameras and step count fixed.",
+      "requires": ["Q0", "inspected object masks", "local tool capability"],
+      "compareTo": ["Q0"],
+      "stopCondition": "Fewer intrusive room artifacts with no loss of legs, arms, back, or mesh. Skip if masks are unreliable."
+    },
+    {
+      "id": "Q2",
+      "change": "Try 6000 steps on an unchanged aligned dataset with a matched 3000-step baseline. Try 9000 only if 6000 visibly improves the chair and time remains.",
+      "requires": ["Q0", "room in time and memory budget"],
+      "compareTo": ["matched 3000-step result"],
+      "stopCondition": "Visible gain across multiple views. Count and registration are diagnostics."
+    },
+    {
+      "id": "Q3",
+      "change": "If quality is limited by coverage, test one sampling or orientation-aware frame-resolution change, with fresh COLMAP calibration.",
+      "requires": ["Q0", "measured coverage or frame-resolution issue"],
+      "compareTo": ["Q0"],
+      "stopCondition": "Maintain useful angular coverage and verify dimensions and quality visually."
+    },
+    {
+      "id": "H1",
+      "change": "Freeze best candidate and reproduce on Repeat. Check the stress take independently and grade the remaining evidence where supported.",
+      "requires": ["provisional Golden visual pass"],
+      "compareTo": ["Repeat baseline", "stress baseline"],
+      "stopCondition": "Golden and Repeat both meet ACCEPTANCE.md, with explicit stress-case verdict."
+    },
+    {
+      "id": "P1",
+      "change": "Compare lower real long-edge size or a lower training budget one at a time, only after a quality winner.",
+      "requires": ["H1"],
+      "compareTo": ["frozen winner"],
+      "stopCondition": "Measured time savings and no loss at the accepted visual floor."
+    },
+    {
+      "id": "I1",
+      "change": "Integrate verified opt-in candidate and run existing regressions and local replay if time and original footage permit.",
+      "requires": ["H1", "regression budget"],
+      "compareTo": ["unchanged default", "frozen winner"],
+      "stopCondition": "Exact launch command, expected preview, named tests, and morning report are verified."
+    }
+  ]
+}
