@@ -135,3 +135,54 @@ test("a non-zero API code becomes an upstream error", async () => {
     return true;
   });
 });
+
+test("submitVideo uses the long upload timeout, not the control timeout", async (t) => {
+  const file = await tempVideo(t, 1024);
+  const client = createKiriClient({
+    apiKey: "k",
+    requestTimeoutMs: 40,
+    uploadTimeoutMs: 5_000,
+    // A real 60 MB upload lasts far longer than 40 ms; this stands in for it.
+    fetchImpl: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      return jsonResponse({ code: 0, msg: "success", data: { serialize: "abc123def456" } });
+    },
+  });
+  const result = await client.submitVideo({ filePath: file, filename: "kursi.mp4" });
+  assert.equal(result.serial, "abc123def456");
+});
+
+test("a successful upload that answers code 200 still yields its serial", async (t) => {
+  const file = await tempVideo(t);
+  const client = createKiriClient({
+    apiKey: "k",
+    // The live API answered exactly this for a real 61 MB 3DGS upload.
+    fetchImpl: async () =>
+      jsonResponse({ code: 200, msg: "success", data: { serialize: "live200serial1" }, ok: true }),
+  });
+  const result = await client.submitVideo({ filePath: file, filename: "kursi.mp4" });
+  assert.equal(result.serial, "live200serial1");
+});
+
+test("code 200 with ok false is still a failure", async (t) => {
+  const file = await tempVideo(t);
+  const client = createKiriClient({
+    apiKey: "k",
+    fetchImpl: async () => jsonResponse({ code: 200, msg: "no credit", data: null, ok: false }),
+  });
+  await assert.rejects(() => client.submitVideo({ filePath: file }), (error) => {
+    assert.equal(error.code, "kiri_unavailable");
+    return true;
+  });
+});
+
+test("getStatus accepts the same success codes as submit", async () => {
+  for (const code of [0, 200]) {
+    const client = createKiriClient({
+      apiKey: "k",
+      fetchImpl: async () => jsonResponse({ code, msg: "success", data: { status: 2 }, ok: true }),
+    });
+    const result = await client.getStatus("abc123def456");
+    assert.equal(result.state, "successful");
+  }
+});

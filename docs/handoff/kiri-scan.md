@@ -1,8 +1,9 @@
 # KIRI-backed scan prototype
 
-**Status:** upload-only prototype, verified against a labelled mock. No real KIRI
-job has been submitted and no credit has been spent. The single authorized live
-test command is at the end of this page.
+**Status:** upload-only prototype, run once against the real KIRI API with a real
+chair clip (one credit). The pipeline, viewer, reload resume and mobile layout
+work; the returned reconstruction is **not yet a usable chair**, so the visual
+gate is still open. Details and the repeat command are at the end of this page.
 
 The old local FFmpeg → COLMAP → Brush → CUDA scanner has been removed from the
 active tree. It remains documented for provenance in
@@ -69,6 +70,25 @@ header and 14 Gaussian properties, converts it, validates the SPZ magic and spla
 count, then keeps only `job.json` and `result.spz`. The uploaded video, ZIP and
 PLY are deleted after use. Failed or expired jobs are never reused by dedupe.
 
+### Backdrop removal
+
+KIRI's 3DGS export appends a synthetic backdrop: a shell of splats at one fixed
+radius, all with the same opacity and scale, far outside the subject. It dominates
+the bounding box, so the viewer framed a grey ball and hid the chair. On success,
+`server/kiri-cleanup.mjs` removes that shell before conversion, but only when the
+evidence is unambiguous: one radius/opacity bucket, at least 5 % of the file and
+200 splats, at least five times the median radius, a tight (±1) radius spread, and
+more than half the splats surviving. Anything else is passed through unchanged.
+On the real export it removed exactly 50 000 of 281 000 splats in 110 ms
+(69.7 MB → 57.3 MB). The removed count is recorded as `cleanup` on the job, and
+the ZIP/PLY are deleted whether finalize succeeds or fails.
+
+Sending the file is the slow step, so it does not share the two-minute control
+timeout: `KIRI_UPLOAD_TIMEOUT_MS` (15 min) covers the KIRI upload and the same
+budget is set as the Node request timeout for the browser's own upload. A 61 MB,
+25 s phone clip took longer than two minutes to reach KIRI, which is exactly the
+case the shorter timeout used to abort.
+
 ## KIRI API contract used
 
 Source of truth: <https://docs.kiriengine.app/>.
@@ -98,6 +118,7 @@ Copy `.env.example` to `.env` and fill the key locally. `.env` is git-ignored.
 | `KIRI_POLL_MIN_MS` / `KIRI_POLL_MAX_MS` | 5000 / 30000 | backoff bounds |
 | `KIRI_KEEP_JOBS` | 50 | terminal jobs kept; active jobs are never pruned |
 | `KIRI_MAX_*_BYTES`, `KIRI_MAX_SPLATS` | see `kiri-config.mjs` | hard caps |
+| `KIRI_UPLOAD_TIMEOUT_MS` | 900000 | budget for sending the clip to KIRI |
 | `KIRI_MOCK_FAIL` | — | `submit`, `process` or `zip`, for the harness only |
 | `KIRI_MOCK_FAIL_ONCE` | off | fail once, then succeed |
 
@@ -109,8 +130,8 @@ otherwise `unconfigured` (upload answered with 503 `missing_key`, UI explains).
 ```sh
 npm ci
 npm run build              # dist is tracked and served by scan:serve
-npm run test:unit          # 194 pass / 0 fail
-npm run test:kiri          # 58 tests, mock adapter and HTTP boundary
+npm run test:unit          # 206 pass / 0 fail
+npm run test:kiri          # 71 tests, mock adapter, HTTP boundary and cleanup
 npm run test:browser       # 26/26 existing marketplace acceptance
 npm run test:kiri:browser  # 16/16 mock browser checks, screenshots in var/kiri-qa
 npm run scan:mock          # http://127.0.0.1:8787/jual/pindai
@@ -126,14 +147,60 @@ upload-page restore, no camera calls, failure + resend after a server restart,
 routes, unknown IDs, and zero page errors or external requests. Screenshots and
 `report.json` are written to `var/kiri-qa/` (git-ignored).
 
-## One authorized live test
+## The first live run (22 November 2026)
 
-Nothing has been sent to KIRI yet. After supplying a key, this spends **one
-credit** and uploads one clip:
+One credit was spent on `golden-chair.mp4`, the 25.3 s, 61 MB portrait chair clip
+kept from the earlier study (stored 1920×1080 with rotation metadata, so it plays
+1080×1920). LihatDulu job `bb2ea77d-6021-4bfb-ab40-88cf9029abb6`, KIRI serial
+`7b761bd9d9de4a85ba0494ee5c9f0b2a`.
+
+| Step | Time |
+|---|---|
+| Browser → our server (local copy) | 0.45 s |
+| Server → KIRI upload | 282 s |
+| KIRI queue + processing | ~29 min |
+| ZIP download, PLY validation, cleanup, SPZ conversion | 233 s |
+| Submit → **ready** | 2 274 s (37 min 54 s) |
+
+Result: 281 000 splats, 4 841 973 B SPZ. KIRI read the clip correctly (300 input
+frames, portrait 1040×1854 in `cameras.json`). All nine live checks passed: live
+server, consent gate, local preview, one submit with a stored serial, polling to
+ready, result render, drag orbit, reload resume with no second job, and 390×844
+with touch orbit. Evidence is in git-ignored `var/kiri-live/` (`report.json`,
+`final-job.json`, 44 screenshots).
+
+**Quality verdict: fails the visual gate.** Before cleanup the viewer showed a
+grey ball, because the export carried 50 000 splats at radius exactly 50.0 with
+identical opacity and scale. With those stripped, the remaining 231 000 splats
+form a dark, hollow shell at radius 3–8 with no recognizable seat, backrest or
+legs (`var/kiri-live/shots/core-desktop-viewer.png` and
+`clean-desktop-viewer.png`). The adapter, storage, conversion and viewer are
+proven; the reconstruction itself is not usable for a listing yet.
+
+Defects the live run exposed, each fixed with a test:
+
+- portrait clips were rejected: the dimension check compared width and height
+  with 1920×1080 instead of long edge ≤1920, short edge ≤1080;
+- the two-minute control timeout aborted the upload: `KIRI_UPLOAD_TIMEOUT_MS`
+  (default 15 min) now covers submit and is also the Node request timeout;
+- the real API answers `{code: 200}` for success, which the client treated as an
+  error;
+- the ZIP and PLY were kept after success (about 120 MB per job) and KIRI's
+  backdrop was left in the model — both handled in `finalize`.
+
+Attempts 1–3 are kept under `var/kiri-live/attempts/`. Attempt 3 uploaded the
+clip but the `code: 200` bug rejected the answer and the serial was never stored;
+KIRI has no list endpoint, so that paid job cannot be recovered from here.
+
+## Repeating the live test
+
+Each run spends **one credit**. Use a different clip, or the ready job is reused
+by the hash dedupe instead of submitting:
 
 ```sh
 cd C:/Users/fauzi/OneDrive/Documents/GitHub/Lihatdulu-kiri-scan
-printf 'KIRI_API_KEY=%s\n' 'PASTE_KEY_HERE' > .env
+printf 'KIRI_API_KEY=%s
+' 'PASTE_KEY_HERE' > .env
 npm run build
 KIRI_MOCK=0 npm run scan:serve
 ```

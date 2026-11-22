@@ -5,6 +5,7 @@ import {
   validateSpz as defaultValidateSpz,
 } from "./kiri-artifact.mjs";
 import { extractSplat as defaultExtract } from "./zip.mjs";
+import { stripBackdrop as defaultStripBackdrop } from "./kiri-cleanup.mjs";
 import { KiriError, toKiriError } from "./kiri-errors.mjs";
 import {
   findReusableByHash,
@@ -42,6 +43,7 @@ export function createKiriService({
   now = () => Date.now(),
   convert = defaultConvert,
   extract = defaultExtract,
+  stripBackdrop = defaultStripBackdrop,
   validatePly = defaultValidatePly,
   validateSpz = defaultValidateSpz,
   readFileImpl = readFile,
@@ -211,7 +213,10 @@ export function createKiriService({
         maxBytes: config.limits.maxPlyBytes,
         maxSplats: config.limits.maxSplats,
       });
-      await writeFile(paths.ply, data);
+      // KIRI appends a synthetic backdrop ball far outside the subject; it would
+      // otherwise become the framing box and hide the furniture.
+      const cleaned = stripBackdrop(data);
+      await writeFile(paths.ply, cleaned.buffer);
       const conversion = await convert({
         inputPath: paths.ply,
         outputPath: paths.artifact,
@@ -232,6 +237,9 @@ export function createKiriService({
           bytes: artifact.bytes,
           splatCount: artifact.splatCount,
         },
+        cleanup: cleaned.removed
+          ? { reason: cleaned.reason, splatsRemoved: cleaned.removed }
+          : null,
         timings: {
           ...job.timings,
           downloadMs: now() - started,
@@ -239,6 +247,8 @@ export function createKiriService({
           finalizeMs: now() - started,
         },
       });
+      // The ZIP and PLY are only working files; keep job.json and result.spz.
+      await cleanupTransient(paths);
       logEvent("job_ready", {
         id: job.id,
         bytes: artifact.bytes,

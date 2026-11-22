@@ -42,6 +42,18 @@ test("a valid MP4 passes the KIRI limits", () => {
   assert.deepEqual(result, { ok: true, code: null, message: "" });
 });
 
+test("a portrait phone clip is the same Full HD budget and is accepted", () => {
+  const result = validateVideoFile({
+    name: "kursi-potret.mp4",
+    type: "video/mp4",
+    size: 61 * 1024 * 1024,
+    durationS: 25.3,
+    width: 1080,
+    height: 1920,
+  });
+  assert.deepEqual(result, { ok: true, code: null, message: "" });
+});
+
 test("non-MP4 files are refused before upload", () => {
   const result = validateVideoFile({ name: "kursi.mov", type: "video/quicktime", size: 10, durationS: 5 });
   assert.equal(result.ok, false);
@@ -59,6 +71,11 @@ test("the upload ceiling, duration and resolution come from KIRI's limits", () =
   );
   assert.equal(
     validateVideoFile({ name: "a.mp4", type: "video/mp4", size: 10, durationS: 5, width: 3840, height: 2160 }).code,
+    "video_too_large_dimensions",
+  );
+  // Portrait 4K is refused too: rotating the frame must not bypass the ceiling.
+  assert.equal(
+    validateVideoFile({ name: "a.mp4", type: "video/mp4", size: 10, durationS: 5, width: 2160, height: 3840 }).code,
     "video_too_large_dimensions",
   );
 });

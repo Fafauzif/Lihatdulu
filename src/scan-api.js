@@ -132,7 +132,9 @@ export function validateVideoBasics(
 }
 
 // KIRI accepts up to 1920x1080 and 3 minutes. We check in the browser because
-// the server deliberately has no FFmpeg/probe step.
+// the server deliberately has no FFmpeg/probe step. The limit is about the size
+// of the frame, not its orientation: a phone clip stored as 1080x1920 (portrait)
+// is the same resolution as 1920x1080 and KIRI accepts it.
 export function validateVideoFile(file = {}, limits = DEFAULT_LIMITS) {
   const basics = validateVideoBasics(file, limits);
   if (!basics.ok) return basics;
@@ -143,7 +145,12 @@ export function validateVideoFile(file = {}, limits = DEFAULT_LIMITS) {
   // rounding rather than rejecting a clip KIRI would accept.
   if (durationS > limits.maxDurationS + 1)
     return validationError("video_too_long");
-  if (width > limits.maxWidth || height > limits.maxHeight)
+  const longEdge = Math.max(width, height);
+  const shortEdge = Math.min(width, height);
+  if (
+    longEdge > Math.max(limits.maxWidth, limits.maxHeight) ||
+    shortEdge > Math.min(limits.maxWidth, limits.maxHeight)
+  )
     return validationError("video_too_large_dimensions");
   return { ok: true, code: null, message: "" };
 }

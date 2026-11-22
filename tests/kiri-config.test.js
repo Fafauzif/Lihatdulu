@@ -73,6 +73,21 @@ test("readKiriConfig applies limits and poll backoff overrides", () => {
   assert.equal(config.limits.maxWidth, 1920);
 });
 
+test("the upload has its own, much longer timeout than control calls", () => {
+  assert.equal(DEFAULTS.uploadTimeoutMs, 15 * 60 * 1000);
+  const defaults = readKiriConfig({ KIRI_API_KEY: "k" }, "C:/work");
+  assert.equal(defaults.uploadTimeoutMs, DEFAULTS.uploadTimeoutMs);
+  assert.ok(
+    defaults.uploadTimeoutMs > defaults.requestTimeoutMs * 5,
+    "a phone clip must not share the two-minute control timeout",
+  );
+  const custom = readKiriConfig(
+    { KIRI_API_KEY: "k", KIRI_UPLOAD_TIMEOUT_MS: "900000" },
+    "C:/work",
+  );
+  assert.equal(custom.uploadTimeoutMs, 900000);
+});
+
 test("publicConfig exposes the mode but never the key or local paths", () => {
   const config = readKiriConfig(
     { KIRI_API_KEY: "super-secret", KIRI_JOBS_ROOT: "C:/private/jobs" },

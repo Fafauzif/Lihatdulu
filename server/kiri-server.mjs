@@ -324,6 +324,7 @@ export function createClient(config) {
       apiKey: config.apiKey,
       baseUrl: config.baseUrl,
       requestTimeoutMs: config.requestTimeoutMs,
+      uploadTimeoutMs: config.uploadTimeoutMs,
       downloadTimeoutMs: config.downloadTimeoutMs,
     });
   return unconfiguredClient();
@@ -340,6 +341,10 @@ export async function startKiriServer({ env = process.env, cwd = process.cwd() }
   const client = createClient(config);
   const service = createKiriService({ config, client, log: defaultLog });
   const server = createKiriServer({ config, service, log: defaultLog });
+  // Node caps a whole request body at five minutes by default, which a phone
+  // clip on a slow uplink can exceed. Keep the same budget as the KIRI upload.
+  server.requestTimeout = config.uploadTimeoutMs;
+  server.headersTimeout = 60_000;
   const resumed = await service.resume();
   await new Promise((done) => server.listen(config.port, config.host, done));
   defaultLog({

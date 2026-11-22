@@ -31,6 +31,7 @@ export function kiriState(status) {
 }
 
 const SERIAL = /^[A-Za-z0-9_-]{8,64}$/;
+const SUCCESS_CODES = new Set([0, 200]);
 const STATUS_BY_HTTP = {
   401: "kiri_unauthorized",
   403: "kiri_no_credit",
@@ -49,6 +50,7 @@ export function createKiriClient({
   baseUrl = "https://api.kiriengine.app/api",
   fetchImpl = fetch,
   requestTimeoutMs = 120_000,
+  uploadTimeoutMs = 15 * 60 * 1000,
   downloadTimeoutMs = 20 * 60 * 1000,
 } = {}) {
   if (!apiKey) throw new KiriError("missing_key");
@@ -89,9 +91,18 @@ export function createKiriClient({
         ),
       });
     }
-    if (payload && payload.code !== 0 && payload.code !== undefined)
+    // KIRI is not consistent about the success code across endpoints: the docs
+    // show `code: 0`, while a live 3DGS upload answered `code: 200` with
+    // `msg: "success"`. A successful upload must never be thrown away, so accept
+    // both, and let an explicit `ok: false` win over either.
+    const code = payload?.code;
+    const accepted =
+      payload?.ok === false
+        ? false
+        : payload?.ok === true || code === undefined || SUCCESS_CODES.has(Number(code));
+    if (payload && !accepted)
       throw new KiriError("kiri_unavailable", {
-        detail: redact(`kode ${payload.code}: ${payload.msg ?? ""}`.slice(0, 200)),
+        detail: redact(`kode ${code}: ${payload.msg ?? ""}`.slice(0, 200)),
       });
     return payload ?? {};
   }
@@ -118,6 +129,9 @@ export function createKiriClient({
       const payload = await request("/v1/open/3dgs/video", {
         method: "POST",
         body: form,
+        // Sending the file is the slow part; never reuse the short control
+        // timeout here or a normal phone clip is aborted mid-upload.
+        timeoutMs: uploadTimeoutMs,
       });
       const serial = payload?.data?.serialize;
       if (typeof serial !== "string" || !SERIAL.test(serial))

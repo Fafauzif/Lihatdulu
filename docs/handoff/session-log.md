@@ -1,5 +1,19 @@
 # Session log
 
+## 2026-11-22 · KIRI live run: pipeline proven, model fails the visual gate
+
+- Branch `feat/kiri-scan` in the worktree `Lihatdulu-kiri-scan`; one live job paid with the owner's key, which lives only in git-ignored `.env` and never reached the tree, the bundle or a log. Architecture and the repeat command: [kiri-scan.md](kiri-scan.md).
+- Clip: `var/kiri-live/input/golden-chair.mp4`, the 25.3 s, 61 MB portrait chair take kept from the earlier study. Job `bb2ea77d-6021-4bfb-ab40-88cf9029abb6`, KIRI serial `7b761bd9d9de4a85ba0494ee5c9f0b2a`.
+- Result: 282 s server→KIRI upload, ~29 min KIRI queue and processing, 233 s ZIP download + PLY validation + conversion, 2 274 s (37 min 54 s) submit→ready. 281 000 splats, 4 841 973 B SPZ. KIRI read the clip correctly: 300 frames, portrait 1040×1854 in `cameras.json`.
+- Live checks 9/9 in `var/kiri-live/report.json`, 44 screenshots: live server, consent gate, local preview, one submit with a stored serial, poll to ready, result render, drag orbit, reload resume with one job and no resubmit, 390×844 plus touch orbit.
+- **Quality verdict: fails.** The 3DGS export adds a synthetic backdrop of 50 000 splats at radius exactly 50.0 (opacity 0.99, scale 0.94), so the viewer framed a grey ball. Removing it leaves 231 000 splats in a dark hollow shell at r≈3–8 with no recognizable seat, backrest or legs. Evidence: `var/kiri-live/shots/core-desktop-viewer.png`, `clean-desktop-viewer.png`.
+- Fixes, each with tests: portrait clips were refused because the dimension check compared width and height with 1920×1080 (now long edge ≤1920, short edge ≤1080, `src/scan-api.js`); the two-minute control timeout killed uploads (15-min `KIRI_UPLOAD_TIMEOUT_MS` for submit and the Node `requestTimeout`); the real API answers `code: 200` and was treated as failure (0 and 200 succeed, explicit `ok:false` still wins); new `server/kiri-cleanup.mjs` strips KIRI's backdrop only on unambiguous evidence, and `finalize` now deletes the ZIP and PLY on success as well as failure, about 120 MB per job.
+- Attempts 1–3 are kept under `var/kiri-live/attempts/`: one aborted by the harness, one by the two-minute timeout, one uploaded successfully but was rejected by the `code: 200` bug and orphaned a paid job whose serial was never stored. KIRI has no list endpoint, so it cannot be recovered.
+- Commands/results: `npm run test:unit` 206 pass / 0 fail; `npm run test:kiri` 71 pass / 0 fail; `npm run test:browser` 26 pass / 0 fail; `npm run test:kiri:browser` 16 pass / 0 fail; `npm run build` succeeds with the existing >500 kB chunk warning.
+- `dist/` was rebuilt. `vite build` still deletes the fifteen prerendered route pages and overwrites the prerendered home page, so all sixteen were restored from HEAD and rewritten to the current hash `assets/index-B8y9i2OB.js` (CSS unchanged); every asset reference in `dist/**/*.html` resolves. A release step still has to produce these pages after a build.
+- Docs: [kiri-scan.md](kiri-scan.md) records the live numbers, the quality verdict, the backdrop cleanup and the repeat command; [scan.md](workstreams/scan.md) separates mock-proven, live-proven and still-unproven.
+- Next unfinished step: quality only. Each candidate costs one credit, so pick deliberately — the same clip with `isMask=0`, or another kept take such as `VID_20261121_184349140.mp4` (20 s) — and judge the four matched poses against `comparisons/reference/ref-golden*`. Keep the in-browser camera deferred until one model visibly passes.
+
 ## 2026-11-22 · Furniture scan rebuilt on KIRI Engine (upload-only prototype)
 
 - Branch `feat/kiri-scan` from `origin/main` (`8b404df`) in a separate worktree `Lihatdulu-kiri-scan`. The primary checkout, its branches, raw footage, `var/` data and the overnight evidence were left untouched; nothing was merged, deployed or pushed.

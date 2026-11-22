@@ -22,6 +22,9 @@ export const DEFAULTS = Object.freeze({
   keepJobs: 50,
   mockLatencyMs: 3_000,
   convertTimeoutMs: 10 * 60 * 1000,
+  // A phone clip is tens of megabytes and the seller's upstream can be slow, so
+  // the upload gets its own budget instead of the short control-call timeout.
+  uploadTimeoutMs: 15 * 60 * 1000,
   requestTimeoutMs: 2 * 60 * 1000,
   downloadTimeoutMs: 20 * 60 * 1000,
   port: 8787,
@@ -109,6 +112,10 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
     convertTimeoutMs: positive(
       env.KIRI_CONVERT_TIMEOUT_MS,
       DEFAULTS.convertTimeoutMs,
+    ),
+    uploadTimeoutMs: positive(
+      env.KIRI_UPLOAD_TIMEOUT_MS,
+      DEFAULTS.uploadTimeoutMs,
     ),
     requestTimeoutMs: positive(
       env.KIRI_REQUEST_TIMEOUT_MS,

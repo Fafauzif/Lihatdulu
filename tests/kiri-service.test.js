@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readKiriConfig } from "../server/kiri-config.mjs";
@@ -8,7 +8,10 @@ import { backoffDelay, createKiriService } from "../server/kiri-service.mjs";
 import { createMockClient } from "../server/kiri-mock.mjs";
 import { listJobs, newJobRecord, readJob, saveNewJob } from "../server/kiri-jobs.mjs";
 
-async function setup(t, { failMode = "", failOnce = false, latencyMs = 40, convert } = {}) {
+async function setup(
+  t,
+  { failMode = "", failOnce = false, latencyMs = 40, convert, stripBackdrop } = {},
+) {
   const root = await mkdtemp(join(tmpdir(), "lihatdulu-service-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const config = readKiriConfig(
@@ -23,7 +26,12 @@ async function setup(t, { failMode = "", failOnce = false, latencyMs = 40, conve
     process.cwd(),
   );
   const client = createMockClient({ jobsRoot: root, latencyMs, failMode, failOnce });
-  const service = createKiriService({ config, client, ...(convert ? { convert } : {}) });
+  const service = createKiriService({
+    config,
+    client,
+    ...(convert ? { convert } : {}),
+    ...(stripBackdrop ? { stripBackdrop } : {}),
+  });
   t.after(() => service.stop());
   const upload = async (name = "kursi.mp4", hash = `hash-${name}`) => {
     const temp = join(root, "tmp", `${Math.random().toString(16).slice(2)}.mp4`);
@@ -155,4 +163,29 @@ test("resume marks a job interrupted mid-submit instead of polling forever", asy
   const stored = await readJob(root, record.id);
   assert.equal(stored.stage, "failed");
   assert.equal(stored.error.code, "submit_interrupted");
+});
+
+test("a ready job keeps only its record and the SPZ", async (t) => {
+  const { root, service, upload } = await setup(t);
+  const { job } = await upload();
+  await service.finalize(await readJob(root, job.id));
+  const ready = await readJob(root, job.id);
+  assert.equal(ready.stage, "ready");
+  assert.equal(ready.cleanup, null);
+  const files = (await readdir(join(root, "jobs", job.id))).sort();
+  assert.deepEqual(files, ["job.json", "mock.json", "result.spz"]);
+  assert.ok(ready.artifact.bytes > 0);
+});
+
+test("a stripped backdrop is recorded on the job", async (t) => {
+  const { root, service, upload } = await setup(t, {
+    stripBackdrop: (buffer) => ({ buffer, removed: 50_000, reason: "kiri-backdrop" }),
+  });
+  const { job } = await upload();
+  await service.finalize(await readJob(root, job.id));
+  const ready = await readJob(root, job.id);
+  assert.equal(ready.stage, "ready");
+  assert.deepEqual(ready.cleanup, { reason: "kiri-backdrop", splatsRemoved: 50_000 });
+  const files = (await readdir(join(root, "jobs", job.id))).sort();
+  assert.deepEqual(files, ["job.json", "mock.json", "result.spz"]);
 });

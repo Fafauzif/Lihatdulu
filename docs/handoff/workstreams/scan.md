@@ -43,17 +43,32 @@ Proven in mock mode on this branch:
   browser checks.
 - No page errors, failed app responses or external requests in the mock run.
 
+Proven against the real KIRI API (one paid job, 22 November 2026):
+
+- One 25.3 s portrait chair clip was accepted, uploaded (282 s), processed
+  (~29 min) and returned a 281 000-splat SPZ (4.84 MB).
+- The server downloaded the 53 MB ZIP, validated the PLY and converted it; the
+  result page loads it, orbits on desktop and touch, and a reload resumes the
+  same job without resubmitting.
+- Total submit → ready was 37 min 54 s. Evidence: `var/kiri-live/report.json`.
+
 Still unproven:
 
-- One authorized live KIRI job with a real chair clip; quality, turnaround and
-  SPZ size are unknown.
+- **Model quality.** The export's synthetic backdrop has been removed, but the
+  remaining reconstruction is a dark hollow shell, not a recognizable chair. The
+  viewer path is fine; the model fails the visual gate.
+- Whether another clip, masking off, or tighter capture guidance produces a
+  usable model within one or two more credits.
 - KIRI key handling on the actual demo host, credit budget and retention.
 - Phone/browser and network behaviour for a real seller.
 - The in-browser camera path, deliberately deferred.
 
 ## Next step
 
-Run the single authorized live test in
-[kiri-scan.md](../kiri-scan.md#one-authorized-live-test). Record the clip, the
-KIRI serial, stage timings, the resulting SPZ size and a viewer screenshot at
-1440 and 390 px. Only then decide whether to add the camera.
+Fix quality before adding features. Each candidate costs one credit, so choose
+deliberately: resubmit the same clip with `isMask=0`, or use a different kept
+clip (for example `VID_20261121_184349140.mp4`, 20 s), then compare the four
+matched poses against the earlier Golden reference renders. The repeat command
+and what is already recorded are in
+[kiri-scan.md](../kiri-scan.md#repeating-the-live-test). Keep the camera deferred
+until one model visibly passes.
