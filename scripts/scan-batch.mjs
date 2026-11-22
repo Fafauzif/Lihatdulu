@@ -103,11 +103,14 @@ export async function runBatch({
 } = {}) {
   if (!root) throw new Error("Folder hasil belum ditentukan.");
   if (!Array.isArray(clips)) throw new Error("Daftar klip tidak valid.");
+  // The real pipeline runs COLMAP with cwd set to the job's logs folder, so a
+  // relative root would resolve the database path against that cwd and fail.
+  const jobRoot = resolve(root);
   const settings = { ...DEFAULT_META, ...meta };
   const results = [];
   for (const clip of clips) {
     const extension = extname(clip.name).toLowerCase();
-    const record = await createJob(root, {
+    const record = await createJob(jobRoot, {
       title: basename(clip.name, extname(clip.name)),
       widthCm: settings.widthCm,
       depthCm: settings.depthCm,
@@ -118,11 +121,11 @@ export async function runBatch({
     });
     let row;
     try {
-      const paths = jobPaths(root, record.id);
+      const paths = jobPaths(jobRoot, record.id);
       await copyFile(clip.path, `${paths.clip}${extension}`);
       const sizeBytes =
         clip.sizeBytes ?? (await stat(clip.path)).size;
-      const current = await updateJob(root, record.id, {
+      const current = await updateJob(jobRoot, record.id, {
         media: {
           ...record.media,
           contentType: CONTENT_TYPES[extension] ?? null,
@@ -130,14 +133,14 @@ export async function runBatch({
         },
       });
       const options = {
-        root,
+        root: jobRoot,
         updateStage: async (stage) => {
           await onProgress?.(clip.name, stage);
         },
       };
       if (limits) options.limits = limits;
       const outcome = await pipeline(current, options);
-      await updateJob(root, record.id, {
+      await updateJob(jobRoot, record.id, {
         stage: "ready",
         media: outcome.media,
         provenance: outcome.provenance,
@@ -163,7 +166,7 @@ export async function runBatch({
               : "internal",
         message: error?.message ?? String(error),
       };
-      await updateJob(root, record.id, { stage: "failed", error: failure });
+      await updateJob(jobRoot, record.id, { stage: "failed", error: failure });
       row = {
         clip: clip.name,
         ok: false,

@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { readJob } from "../server/scan-jobs.mjs";
 import { ScanError } from "../server/scan-errors.mjs";
 import {
@@ -79,4 +80,33 @@ test("runBatch records a failed clip and still runs the next one", async () => {
   assert.deepEqual(calls, ["chair-a", "chair-b"]);
   assert.deepEqual(results.map((result) => result.ok), [false, true]);
   assert.equal((await readJob(root, results[0].jobId)).error.code, "alignment_failed");
+});
+
+test("runBatch hands the pipeline an absolute root for relative input", async () => {
+  const absoluteRoot = await mkdtemp(join(tmpdir(), "scan-relroot-"));
+  const relativeRoot = relative(process.cwd(), absoluteRoot);
+  let seenRoot = null;
+  const clipPath = join(absoluteRoot, "clip.mp4");
+  await writeFile(clipPath, "x");
+  const results = await runBatch({
+    root: relativeRoot,
+    clips: [{ name: "clip.mp4", path: clipPath, sizeBytes: 1 }],
+    pipeline: async (record, options) => {
+      seenRoot = options.root;
+      return {
+        media: { ...record.media, durationS: 12.3, width: 1280, height: 720 },
+        provenance: {
+          frames: { extracted: 60, registered: 50, ratio: 0.8333 },
+          timings: { totalMs: 1 },
+        },
+        artifact: { format: "spz", bytes: 10, splatCount: 60, file: "scan.spz", stills: [] },
+      };
+    },
+  });
+  assert.equal(results[0].ok, true);
+  assert.ok(
+    isAbsolute(seenRoot),
+    `pipeline options.root must be absolute, got ${seenRoot}`,
+  );
+  assert.ok(existsSync(join(absoluteRoot, results[0].jobId, "job.json")));
 });
