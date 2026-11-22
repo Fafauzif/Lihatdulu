@@ -261,8 +261,27 @@ test("subjectRadius clamps the opaque spread and ignores faint splats", () => {
     Math.abs(result.radius - 0.9 * result.spread) < 0.01,
     String(result.radius),
   );
-  assert.ok(result.radius >= CHAIR_PROFILE.minRadius);
+  assert.equal(
+    result.radius,
+    Math.round(
+      Math.min(
+        CHAIR_PROFILE.maxRadius,
+        Math.max(CHAIR_PROFILE.minRadius, CHAIR_PROFILE.radiusFactor * result.spread),
+      ) * 1000,
+    ) / 1000,
+  );
   assert.ok(result.opaqueSplats >= 400 && result.opaqueSplats < 600);
+
+  // A small opaque mass hits the floor: 0.9 x 1.4 = 1.26 clamps to 1.8.
+  const small = parsePly(
+    plyBuffer([
+      ...shellRows({ radius: 1.0, count: 200, alpha: 0.6 }),
+      ...shellRows({ radius: 1.4, count: 200, alpha: 0.6 }),
+    ]),
+  );
+  const smallResult = subjectRadius(small, [0, 0, 0]);
+  assert.ok(Math.abs(smallResult.spread - 1.4) < 0.02, String(smallResult.spread));
+  assert.equal(smallResult.radius, CHAIR_PROFILE.minRadius);
 
   const wide = parsePly(
     plyBuffer([
@@ -271,11 +290,22 @@ test("subjectRadius clamps the opaque spread and ignores faint splats", () => {
     ]),
   );
   const wideResult = subjectRadius(wide, [0, 0, 0]);
-  // A wide opaque mass scales the radius up but never past the ceiling.
-  assert.ok(
-    wideResult.radius > 2.5 && wideResult.radius <= CHAIR_PROFILE.maxRadius,
-    String(wideResult.radius),
+  // 0.9 x 2.9 lands just below the ceiling, so assert the rule, not a floor.
+  assert.equal(
+    wideResult.radius,
+    Math.round(
+      Math.min(
+        CHAIR_PROFILE.maxRadius,
+        Math.max(CHAIR_PROFILE.minRadius, CHAIR_PROFILE.radiusFactor * wideResult.spread),
+      ) * 1000,
+    ) / 1000,
   );
+  // A tighter ceiling must bind deterministically, so the clamp itself is pinned.
+  const capped = subjectRadius(wide, [0, 0, 0], {
+    ...CHAIR_PROFILE,
+    maxRadius: 2.0,
+  });
+  assert.equal(capped.radius, 2.0);
   assert.throws(
     () => subjectRadius(parsePly(plyBuffer(shellRows({ radius: 1, count: 10, alpha: 0.5 }))), [0, 0, 0]),
     CleanupError,
@@ -432,6 +462,8 @@ test("planSubjectCleanup reports the sphere and keeps the subject", () => {
   ]);
   const plan = planSubjectCleanup(buffer, [0, 0, 0]);
   assert.equal(plan.stats.splatsBefore, 900);
+  // The centre is the ray target as passed in, not a re-derived mass centre.
+  assert.deepEqual(plan.stats.centre, [0, 0, 0]);
   assert.equal(plan.stats.radius, Math.round(CHAIR_PROFILE.minRadius * 1000) / 1000);
   assert.equal(plan.stats.splatsAfter, 600);
   assert.equal(plan.stats.keptRatio, 0.6667);
