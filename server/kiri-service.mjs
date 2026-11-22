@@ -5,8 +5,13 @@ import {
   validateSplatPly as defaultValidatePly,
   validateSpz as defaultValidateSpz,
 } from "./kiri-artifact.mjs";
-import { extractSplat as defaultExtract } from "./zip.mjs";
-import { stripBackdrop as defaultStripBackdrop } from "./kiri-cleanup.mjs";
+import { extractSplat as defaultExtract, listZipEntries, readZipEntry } from "./zip.mjs";
+import {
+  cropToSubject,
+  orbitCenter,
+  readCameras,
+  stripBackdrop as defaultStripBackdrop,
+} from "./kiri-cleanup.mjs";
 import { createFrameExtractor } from "./kiri-frames.mjs";
 import { KiriError, toKiriError } from "./kiri-errors.mjs";
 import {
@@ -198,6 +203,25 @@ export function createKiriService({
     }
   }
 
+  // The export ZIP also carries cameras.json. Pass it through the same cleanup
+  // guards as the splats: an unreadable or flat camera set means no crop.
+  function cropToOrbit(buffer, zip) {
+    let cameras = null;
+    try {
+      const entry = listZipEntries(zip).find((item) => /(^|\/)cameras\.json$/i.test(item.name));
+      if (entry) cameras = readCameras(readZipEntry(zip, entry).toString("utf8"));
+    } catch {
+      cameras = null;
+    }
+    if (!cameras) return null;
+    const centre = orbitCenter(cameras);
+    if (!centre) return null;
+    const radius = config.crop?.radius ?? 1.6;
+    const attempt = cropToSubject(buffer, { center: centre, radius });
+    if (!attempt.removed) return null;
+    return { buffer: attempt.buffer, centre, radius, removed: attempt.removed };
+  }
+
   async function finalize(job) {
     const paths = jobPaths(jobsRoot, job.id);
     const started = now();
@@ -219,7 +243,11 @@ export function createKiriService({
       // KIRI appends a synthetic backdrop ball far outside the subject; it would
       // otherwise become the framing box and hide the furniture.
       const cleaned = stripBackdrop(data);
-      await writeFile(paths.ply, cleaned.buffer);
+      // A 3DGS export is the whole room. For an object profile, cut to where the
+      // camera axes meet: that point is the thing the seller orbited around.
+      const crop = config.crop?.mode === "subject" ? cropToOrbit(cleaned.buffer, zip) : null;
+      const shaped = crop ? crop.buffer : cleaned.buffer;
+      await writeFile(paths.ply, shaped);
       const conversion = await convert({
         inputPath: paths.ply,
         outputPath: paths.artifact,
@@ -242,6 +270,13 @@ export function createKiriService({
         },
         cleanup: cleaned.removed
           ? { reason: cleaned.reason, splatsRemoved: cleaned.removed }
+          : null,
+        crop: crop
+          ? {
+              center: crop.centre.map((value) => Number(value.toFixed(3))),
+              radius: crop.radius,
+              splatsRemoved: crop.removed,
+            }
           : null,
         timings: {
           ...job.timings,

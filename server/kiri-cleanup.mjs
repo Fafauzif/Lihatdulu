@@ -121,3 +121,168 @@ export function stripBackdrop(
   }
   return { buffer: out, removed, reason: "kiri-backdrop" };
 }
+
+
+// --- subject crop ----------------------------------------------------------
+
+// KIRI's ZIP also carries cameras.json: one entry per photo with a position and
+// a 3x3 rotation. The export is a whole room, and for a 360° orbit the subject
+// sits where the optical axes meet, so the crossing point is a centre that does
+// not depend on the backdrop or the walls.
+
+export function readCameras(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(text));
+  } catch {
+    return null;
+  }
+  const list = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.cameras)
+      ? parsed.cameras
+      : null;
+  if (!list || list.length < 3) return null;
+  const cameras = [];
+  for (const entry of list) {
+    const position = entry?.position;
+    const rotation = entry?.rotation;
+    if (!Array.isArray(position) || position.length < 3) continue;
+    if (!Array.isArray(rotation) || rotation.length < 3) continue;
+    const numbers = position.slice(0, 3).map(Number);
+    if (numbers.some((value) => !Number.isFinite(value))) continue;
+    const matrix = rotation.slice(0, 3).map((row) => {
+      if (!Array.isArray(row) || row.length < 3) return null;
+      const values = row.slice(0, 3).map(Number);
+      return values.every((value) => Number.isFinite(value)) ? values : null;
+    });
+    if (matrix.some((row) => !row)) continue;
+    cameras.push({ position: numbers, rotation: matrix });
+  }
+  return cameras.length >= 3 ? cameras : null;
+}
+
+// Least-squares meeting point of the camera axes. Rotation may be stored as
+// camera-to-world or world-to-camera, so the direction is chosen by checking
+// which reading points at the middle of the camera ring.
+export function orbitCenter(cameras) {
+  if (!Array.isArray(cameras) || cameras.length < 3) return null;
+  const count = cameras.length;
+  const centroid = [0, 0, 0];
+  for (const { position } of cameras)
+    for (let axis = 0; axis < 3; axis += 1) centroid[axis] += position[axis] / count;
+
+  let along = 0;
+  const directions = cameras.map(({ rotation }) => {
+    // Third column of R is the camera's +z axis in camera coordinates.
+    const direction = [rotation[0][2], rotation[1][2], rotation[2][2]];
+    const length = Math.hypot(...direction);
+    return length > 0 ? direction.map((value) => value / length) : null;
+  });
+  if (directions.some((direction) => !direction)) return null;
+  for (let index = 0; index < count; index += 1) {
+    const toCentre = [
+      centroid[0] - cameras[index].position[0],
+      centroid[1] - cameras[index].position[1],
+      centroid[2] - cameras[index].position[2],
+    ];
+    const length = Math.hypot(...toCentre) || 1;
+    along +=
+      (directions[index][0] * toCentre[0] +
+        directions[index][1] * toCentre[1] +
+        directions[index][2] * toCentre[2]) /
+      length;
+  }
+  const sign = along < 0 ? -1 : 1;
+
+  const a = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
+  const b = [0, 0, 0];
+  for (let index = 0; index < count; index += 1) {
+    const direction = directions[index].map((value) => value * sign);
+    const position = cameras[index].position;
+    for (let row = 0; row < 3; row += 1) {
+      for (let column = 0; column < 3; column += 1) {
+        const projection = (row === column ? 1 : 0) - direction[row] * direction[column];
+        a[row][column] += projection;
+        b[row] += projection * position[column];
+      }
+    }
+  }
+  const determinant =
+    a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) -
+    a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
+    a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-9) return null;
+  const inverse = [
+    [
+      (a[1][1] * a[2][2] - a[1][2] * a[2][1]) / determinant,
+      (a[0][2] * a[2][1] - a[0][1] * a[2][2]) / determinant,
+      (a[0][1] * a[1][2] - a[0][2] * a[1][1]) / determinant,
+    ],
+    [
+      (a[1][2] * a[2][0] - a[1][0] * a[2][2]) / determinant,
+      (a[0][0] * a[2][2] - a[0][2] * a[2][0]) / determinant,
+      (a[0][2] * a[1][0] - a[0][0] * a[1][2]) / determinant,
+    ],
+    [
+      (a[1][0] * a[2][1] - a[1][1] * a[2][0]) / determinant,
+      (a[0][1] * a[2][0] - a[0][0] * a[2][1]) / determinant,
+      (a[0][0] * a[1][1] - a[0][1] * a[1][0]) / determinant,
+    ],
+  ];
+  const centre = [0, 1, 2].map(
+    (row) => inverse[row][0] * b[0] + inverse[row][1] * b[1] + inverse[row][2] * b[2],
+  );
+  return centre.every(Number.isFinite) ? centre : null;
+}
+
+// Keep only the splats around the subject. The viewer fits the bounding box, so
+// leaving the rest of the room in place is what makes a chair look like a dot.
+export function cropToSubject(buffer, { center, radius = 1.6, minKeep = 400 } = {}) {
+  const unchanged = { buffer, removed: 0, reason: null };
+  if (!Array.isArray(center) || center.length !== 3) return unchanged;
+  if (!center.every(Number.isFinite) || !(radius > 0)) return unchanged;
+  const head = readPlyHeader(buffer);
+  if (!head) return unchanged;
+  const ix = head.props.indexOf("x");
+  const iy = head.props.indexOf("y");
+  const iz = head.props.indexOf("z");
+  if ([ix, iy, iz].includes(-1)) return unchanged;
+
+  const data = new DataView(buffer.buffer, buffer.byteOffset, buffer.length);
+  const keep = new Uint8Array(head.count);
+  let kept = 0;
+  for (let index = 0; index < head.count; index += 1) {
+    const base = head.bodyStart + index * head.rowBytes;
+    const distance = Math.hypot(
+      data.getFloat32(base + ix * 4, true) - center[0],
+      data.getFloat32(base + iy * 4, true) - center[1],
+      data.getFloat32(base + iz * 4, true) - center[2],
+    );
+    if (distance <= radius) {
+      keep[index] = 1;
+      kept += 1;
+    }
+  }
+  const removed = head.count - kept;
+  if (kept < minKeep || removed < 1) return unchanged;
+
+  const newHeader = head.headerText.replace(
+    `element vertex ${head.count}`,
+    `element vertex ${kept}`,
+  );
+  const out = Buffer.allocUnsafe(newHeader.length + kept * head.rowBytes);
+  out.write(newHeader, 0, "latin1");
+  let offset = newHeader.length;
+  for (let index = 0; index < head.count; index += 1) {
+    if (!keep[index]) continue;
+    const start = head.bodyStart + index * head.rowBytes;
+    out.set(buffer.subarray(start, start + head.rowBytes), offset);
+    offset += head.rowBytes;
+  }
+  return { buffer: out, removed, reason: "subject-crop", kept };
+}

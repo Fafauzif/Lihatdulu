@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readPlyHeader, stripBackdrop } from "../server/kiri-cleanup.mjs";
+import { cropToSubject, orbitCenter, readCameras, readPlyHeader, stripBackdrop } from "../server/kiri-cleanup.mjs";
 
 const PROPS = [
   "x", "y", "z",
@@ -133,4 +133,91 @@ test("an unexpected PLY layout is passed through unchanged", () => {
   assert.equal(result.removed, 0);
   assert.equal(result.buffer, ascii);
   assert.equal(readPlyHeader(ascii), null);
+});
+
+// --- cameras and subject crop ---------------------------------------------
+
+// A camera ring around the origin, looking inwards, as KIRI writes it: the
+// rotation is a full 3x3 matrix and the third column is the optical axis.
+function cameraRing(count = 12, radius = 4, height = 0.4) {
+  const cameras = [];
+  for (let index = 0; index < count; index += 1) {
+    const angle = (index / count) * Math.PI * 2;
+    const position = [Math.cos(angle) * radius, height, Math.sin(angle) * radius];
+    const forward = [
+      -position[0] / radius,
+      0,
+      -position[2] / radius,
+    ];
+    const right = [forward[2], 0, -forward[0]];
+    const up = [0, 1, 0];
+    // Columns: right, up, forward.
+    const rotation = [
+      [right[0], up[0], forward[0]],
+      [right[1], up[1], forward[1]],
+      [right[2], up[2], forward[2]],
+    ];
+    cameras.push({ position, rotation });
+  }
+  return cameras;
+}
+
+test("readCameras accepts KIRI's shape and rejects junk", () => {
+  const cameras = readCameras(JSON.stringify(cameraRing(6)));
+  assert.equal(cameras.length, 6);
+  assert.deepEqual(cameras[0].position.length, 3);
+  assert.equal(readCameras("not json"), null);
+  assert.equal(readCameras(JSON.stringify([{ position: [1, 2, 3] }])), null);
+  assert.equal(readCameras(JSON.stringify({ cameras: cameraRing(4) })).length, 4);
+});
+
+test("orbitCenter finds the middle of a camera ring", () => {
+  const centre = orbitCenter(readCameras(JSON.stringify(cameraRing(16, 4.2, 0.3))));
+  assert.ok(centre, "centre expected");
+  const distance = Math.hypot(centre[0], centre[1], centre[2]);
+  assert.ok(distance < 0.35, `expected the ring centre, got ${distance.toFixed(2)} m`);
+});
+
+test("orbitCenter survives flipped rotations", () => {
+  const flipped = cameraRing(12).map((camera) => ({
+    ...camera,
+    rotation: camera.rotation.map((row) => row.map((value) => -value)),
+  }));
+  const centre = orbitCenter(readCameras(JSON.stringify(flipped)));
+  assert.ok(centre);
+  // The rays stay horizontal, so only the horizontal position is pinned; the
+  // height lands on the camera ring's own height.
+  assert.ok(Math.hypot(centre[0], centre[2]) < 0.35);
+  assert.ok(Math.abs(centre[1] - 0.4) < 0.15);
+});
+
+test("a subject crop keeps the middle of the scan and drops the room", () => {
+  const rows = [];
+  for (let i = 0; i < 500; i += 1) {
+    const angle = (i / 500) * Math.PI * 2;
+    rows.push({ x: Math.cos(angle) * 0.6, y: (i % 10) / 8, z: Math.sin(angle) * 0.6 });
+  }
+  for (let i = 0; i < 500; i += 1) {
+    const angle = (i / 500) * Math.PI * 2;
+    rows.push({ x: Math.cos(angle) * 12, y: (i % 10) / 5, z: Math.sin(angle) * 9 });
+  }
+  const buffer = buildPly(rows);
+  const cropped = cropToSubject(buffer, { center: [0, 0.5, 0], radius: 1.6 });
+  assert.equal(cropped.reason, "subject-crop");
+  assert.equal(cropped.removed, 500);
+  const head = readPlyHeader(cropped.buffer);
+  assert.equal(head.count, 500);
+});
+
+test("a crop that would empty the scan is refused", () => {
+  const buffer = buildPly(nouveauModel());
+  const cropped = cropToSubject(buffer, { center: [50, 50, 50], radius: 1 });
+  assert.equal(cropped.removed, 0);
+  assert.equal(cropped.buffer, buffer);
+});
+
+test("a crop with no usable centre is refused", () => {
+  const buffer = buildPly(nouveauModel());
+  assert.equal(cropToSubject(buffer, { radius: 1 }).removed, 0);
+  assert.equal(cropToSubject(buffer, { center: [0, 0, 0], radius: 0 }).removed, 0);
 });

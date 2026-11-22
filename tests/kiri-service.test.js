@@ -1,17 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { readKiriConfig } from "../server/kiri-config.mjs";
 import { backoffDelay, createKiriService } from "../server/kiri-service.mjs";
 import { KiriError } from "../server/kiri-errors.mjs";
 import { createMockClient } from "../server/kiri-mock.mjs";
 import { listJobs, newJobRecord, readJob, saveNewJob } from "../server/kiri-jobs.mjs";
+import { buildZip } from "./helpers/zip-fixture.mjs";
 
 async function setup(
   t,
-  { failMode = "", failOnce = false, latencyMs = 40, convert, stripBackdrop } = {},
+  { failMode = "", failOnce = false, latencyMs = 40, convert, stripBackdrop, env = {} } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "lihatdulu-service-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -23,6 +24,7 @@ async function setup(
       // No automatic poller in unit tests: each test drives the stage it needs.
       KIRI_POLL_MIN_MS: "600000",
       KIRI_POLL_MAX_MS: "600000",
+      ...env,
     },
     process.cwd(),
   );
@@ -189,6 +191,127 @@ test("a stripped backdrop is recorded on the job", async (t) => {
   assert.deepEqual(ready.cleanup, { reason: "kiri-backdrop", splatsRemoved: 50_000 });
   const files = (await readdir(join(root, "jobs", job.id))).sort();
   assert.deepEqual(files, ["job.json", "mock.json", "result.spz"]);
+});
+
+// --- subject profile -------------------------------------------------------
+
+const PLY_PROPERTIES = [
+  "x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2", "opacity",
+  "scale_0", "scale_1", "scale_2", "rot_0", "rot_1", "rot_2", "rot_3",
+];
+
+function splatPly(points) {
+  const header = Buffer.from(
+    [
+      "ply",
+      "format binary_little_endian 1.0",
+      `element vertex ${points.length}`,
+      ...PLY_PROPERTIES.map((name) => `property float ${name}`),
+      "end_header",
+      "",
+    ].join("\n"),
+    "latin1",
+  );
+  const body = Buffer.alloc(points.length * PLY_PROPERTIES.length * 4);
+  let cursor = 0;
+  for (const [x, y, z] of points) {
+    for (const value of [x, y, z, 0, 0, 0, 2.6, -4.1, -4.1, -4.1, 1, 0, 0, 0]) {
+      body.writeFloatLE(value, cursor);
+      cursor += 4;
+    }
+  }
+  return Buffer.concat([header, body]);
+}
+
+// Cameras on a ring, each pointing at the ring's centre. The third column of the
+// rotation is the camera +z axis, which is what the service intersects.
+function ringCameras(count = 6, radius = 3, height = 0.2) {
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2;
+    const dx = Math.cos(angle);
+    const dz = Math.sin(angle);
+    return {
+      position: [dx * radius, height, dz * radius],
+      rotation: [
+        [dz, 0, dx],
+        [0, 1, 0],
+        [-dx, 0, dz],
+      ],
+      width: 1039,
+      height: 1855,
+    };
+  });
+}
+
+function spzStub(splatCount) {
+  const buffer = Buffer.alloc(16);
+  buffer.write("NGSP", 0, "latin1");
+  buffer.writeUInt32LE(2, 4);
+  buffer.writeUInt32LE(splatCount, 8);
+  return buffer;
+}
+
+test("the subject profile crops the export around the orbit centre", async (t) => {
+  const near = Array.from({ length: 420 }, (_, index) => {
+    const angle = (index / 420) * Math.PI * 2;
+    return [Math.cos(angle) * 0.3, 0.2 + (index % 7) / 20, Math.sin(angle) * 0.3];
+  });
+  const far = Array.from({ length: 580 }, (_, index) => {
+    const angle = (index / 580) * Math.PI * 2;
+    return [Math.cos(angle) * 4, 1.5 + (index % 5) / 10, Math.sin(angle) * 4];
+  });
+  const ply = splatPly([...near, ...far]);
+  let converted = null;
+  const { root, service, client, upload } = await setup(t, {
+    env: { KIRI_CROP: "subject", KIRI_CROP_RADIUS: "1.2" },
+    // Keep the fixture focused on the crop: the backdrop pass has its own tests.
+    stripBackdrop: (buffer) => ({ buffer, removed: 0, reason: null }),
+    async convert({ inputPath, outputPath }) {
+      converted = await readFile(inputPath);
+      await writeFile(outputPath, spzStub(near.length));
+      return { ms: 3 };
+    },
+  });
+  client.downloadZip = async (serial, destination) => {
+    const zip = buildZip([
+      { name: "0/point_cloud.ply", data: ply },
+      { name: "0/cameras.json", data: Buffer.from(JSON.stringify({ cameras: ringCameras() })) },
+    ]);
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, zip);
+    return { bytes: zip.length };
+  };
+  const { job } = await upload();
+  await service.finalize(await readJob(root, job.id));
+  const ready = await readJob(root, job.id);
+  assert.equal(ready.stage, "ready");
+  assert.deepEqual(ready.crop, {
+    center: [0, 0.2, 0],
+    radius: 1.2,
+    splatsRemoved: far.length,
+  });
+  assert.equal(ready.artifact.splatCount, near.length);
+  const header = converted.toString("latin1", 0, 400);
+  assert.match(header, new RegExp(`element vertex ${near.length}\\b`));
+  assert.ok(converted.length > 0);
+});
+
+test("the default profile leaves the export uncropped", async (t) => {
+  const { root, service, client, upload } = await setup(t);
+  client.downloadZip = async (serial, destination) => {
+    const zip = buildZip([
+      { name: "0/point_cloud.ply", data: splatPly(Array.from({ length: 600 }, () => [4, 4, 4])) },
+      { name: "0/cameras.json", data: Buffer.from(JSON.stringify({ cameras: ringCameras() })) },
+    ]);
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, zip);
+    return { bytes: zip.length };
+  };
+  const { job } = await upload();
+  await service.finalize(await readJob(root, job.id));
+  const ready = await readJob(root, job.id);
+  assert.equal(ready.stage, "ready");
+  assert.equal(ready.crop, null);
 });
 
 // --- KIRI photo profile ----------------------------------------------------

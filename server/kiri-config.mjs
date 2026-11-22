@@ -27,8 +27,10 @@ export const DEFAULTS = Object.freeze({
   uploadTimeoutMs: 15 * 60 * 1000,
   isMask: 1,
   inputMode: "video",
+  cropMode: "off",
   frameFps: 4,
   photoCount: 120,
+  cropRadius: 1.6,
   requestTimeoutMs: 2 * 60 * 1000,
   downloadTimeoutMs: 20 * 60 * 1000,
   port: 8787,
@@ -141,6 +143,11 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
       env.KIRI_DOWNLOAD_TIMEOUT_MS,
       DEFAULTS.downloadTimeoutMs,
     ),
+    crop: {
+      // "subject" cuts the room away and keeps what the camera orbited around.
+      mode: String(env.KIRI_CROP || DEFAULTS.cropMode).trim().toLowerCase() === "subject" ? "subject" : "off",
+      radius: positive(env.KIRI_CROP_RADIUS, DEFAULTS.cropRadius),
+    },
     port: positive(env.KIRI_PORT, DEFAULTS.port),
     host: env.KIRI_HOST || DEFAULTS.host,
     serveDist: flag(env.KIRI_SERVE_DIST, true),
