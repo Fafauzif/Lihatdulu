@@ -14,7 +14,7 @@
 | Real scan limits | 100 MB upload, 8–45 s clip (server accepts 7–50 s), 60 frames minimum, 60 MB / 2.5 M splat artifact cap, 10 finished jobs retained. | Real footage shows the limits are wrong for the chair. |
 | Real scan truth | The preview is a separate `/pindai/:id` route with clip provenance, measured dimensions and frames extracted from the same clip. Scans do not become catalogue listings. | The owner wants scans listed in the catalogue. |
 | Scan toolchain | Pin COLMAP 4.2.1 and Brush 0.3.0 locally under `var/tools` and resolve them with `SCAN_COLMAP` / `SCAN_BRUSH`; do not change the system PATH. | The demo laptop is reimaged or a second laptop is used. |
-| Real chair capture | Rear camera at 1080p; one slow 15–25 s orbit at two heights with overlapping views; 3 fps base extraction (retry to 5–8 fps only when a VFR clip misses the 60-frame floor); 4K source is unnecessary after the 1280 downscale; side light for dark furniture. | A physical phone/tunnel run or a reshoot shows different quality. |
+| Real chair capture | Rear camera at 1080p; one slow orbit, preferably 15–25 s, at two heights with overlapping views; 3 fps base extraction (retry to 5–8 fps only when a VFR clip misses the 60-frame floor); 4K source is unnecessary after the 1280 downscale; side light for dark furniture. | A physical phone/tunnel run or a reshoot shows different quality. |
 
 ## Still open
 

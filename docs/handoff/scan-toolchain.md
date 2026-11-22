@@ -37,7 +37,7 @@ node node_modules\@playcanvas\splat-transform\bin\cli.mjs var\spike\scan.ply --f
 
 The frame step is adaptive: the worker extracts at a 3 fps base and raises the rate one step at a time (capped at 8 fps) only when the actual frame count misses the unchanged 60-frame floor. Phone clips are variable-frame-rate — a 15.00 s take at 4 fps produced 59 real frames — so the retry exists to keep usable footage without lowering the floor. Successful takes keep the base rate.
 
-COLMAP's mapper can emit several disjoint sub-models (`sparse/0`, `sparse/1`, …). The worker runs `model_analyzer` on every numeric folder and uses the model with the highest `Registered images:` for both the registration ratio and the Brush dataset. Assuming `sparse/0` made the 20.13 s repeat take look like a 2/60 failure while `sparse/1` actually held 60/60.
+COLMAP's mapper can emit several disjoint sub-models (`sparse/0`, `sparse/1`, …). The worker runs `model_analyzer` on every numeric folder and uses the model with the highest `Registered images:` for both the registration ratio and the Brush dataset. Reading only `sparse/0` made the 20.13 s repeat take look like a 2/60 failure, while `sparse/1` actually held 60/60. The ratio counts frames present in the chosen COLMAP model; it is a registration metric, not a visual-quality score.
 
 Brush options that matter (from the recorded help):
 
@@ -71,17 +71,17 @@ Camera originals only: the five compressed WhatsApp copies were archived under `
 | `VID_20261121_184626753.mp4` | 1920×1080 | 15.00 | 74 | 74 | 1.00 | 3 020 | 130 291 | 135 725 | 503 | 269 539 | 33 284 | 0.62 | ready (5 fps extraction retry) | recognizable chair |
 | `VID_20261121_184714115.mp4` | 3840×2160 → 1280 frames | 14.62 | 71 | 71 | 1.00 | 3 874 | 105 922 | 134 968 | 458 | 245 222 | 18 461 | 0.34 | ready | recognizable chair |
 
-The visual column is a programmatic verdict, not a human review: all seven viewer captures reached `data-state="ready"` at 1440 and 390 px, rendered 46–122 KB viewer screenshots, and the pixel metrics were centre-weighted with 1–6 % edge content (no clipping signal). No image was opened in chat; the viewer PNGs live under `var/spike/preview-*/`.
+The visual column is a programmatic verdict, not a human review: all seven viewer captures reached `data-state="ready"` at 1440 and 390 px with the placeholder hidden and a live WebGL2 canvas, rendered 46–122 KB viewer screenshots, and the pixel metrics were centre-weighted with 1–6 % edge content (no clipping signal). No image was opened in chat; the viewer PNGs live under `var/spike/preview-*/`. `VID_20261121_184626753.mp4` needed the capped extraction retry: the 4 fps pass produced 59 frames, so it re-extracted at 5 fps (74 frames); its `extract ms` is the sum of both passes.
 
-**Verdict: Go.** Both golden-pair clips pass the Task 4 gate (registration ratio 1.00 vs the 0.60 requirement, 4.85 / 4.83 minutes per clip vs the 10-minute target, 0.52 / 0.47 MiB vs the 60 MB cap), and all five variants reconstruct as well. The measured capture recipe for the competition scan:
+**Verdict: Go for reconstruction from phone camera originals in this lab pipeline.** The in-app phone → laptop → same-site preview path remains the unproven acceptance item. Both golden-pair clips pass the Task 4 gate (registration ratio 1.00 vs the 0.60 requirement, 4.85 / 4.83 minutes per clip vs the 10-minute target, 0.52 / 0.47 MiB vs the 60 MB cap), and all five variants reconstruct as well. The measured capture recipe for the competition scan:
 
-- Rear camera at 1080p/60 is enough; do not carry the 4K source. One slow single orbit of **15–25 s** at two heights, overlapping views, chair fully in frame. The 25.35 s golden take is the best default; 10 s still reconstructs but renders less of the frame.
-- Keep the base 3 fps extraction; the worker raises to 5–8 fps only when a VFR clip misses the 60-frame floor. Expect **4–5.5 minutes per clip** end-to-end on the Helios (golden 4.85 min, variants 4.07–5.55 min).
+- 1080p phone camera frames are enough — all seven originals were 1080p/60 VFR and the 4K take is downscaled — so do not carry the 4K source. One slow single orbit, preferably **15–25 s**, at two heights with overlapping views and the chair fully in frame. The 25.35 s golden take is the best default; 10 s still reconstructs but renders less of the frame.
+- Keep the base 3 fps extraction; the worker raises to 5–8 fps only when a VFR clip misses the 60-frame floor. Expect **4.1–5.6 minutes per clip** end-to-end on the Helios (golden 4.85 min, variants 4.07–5.55 min).
 - For this black mesh chair in mixed indoor light, side light remains the recommendation (now surfaced in the capture UI) and a bright window directly behind the object should be avoided.
 
 Two pipeline defects were found and fixed during the study without moving any threshold: the batch harness passed a relative root (COLMAP rejected the database parent path), and the worker assumed `sparse/0` even when the mapper emitted a larger `sparse/1` (the repeat take looked like 2/60 registration while the chosen model held 60/60). Both have RED→GREEN regression tests in `tests/scan-batch.test.js` and `tests/scan-pipeline.test.js`.
 
-Raw evidence lives outside version control: `var/spike/results-golden.json`, `var/spike/results-variants.json`, `var/spike/golden-notes.md`, `var/spike/comparison.md`, `var/spike/visual-verdicts.md`, and the per-job preview folders.
+Raw evidence lives outside version control: `var/spike/results-golden.json`, `var/spike/results-variants.json`, `var/spike/results-variants-attempt1.json` (the 184626 framing failure), `var/spike/results-variants-184626.json` (its re-run), `var/spike/golden-notes.md`, `var/spike/comparison.md`, `var/spike/visual-verdicts.md`, and the per-job preview folders. The viewer-element PNGs behind the programmatic verdicts are `var/spike/preview-<clip>/viewer-1440.png` and `viewer-390.png`.
 
 ## Still pending (needs the physical phone and tunnel)
 
