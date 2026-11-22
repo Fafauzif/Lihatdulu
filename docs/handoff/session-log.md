@@ -47,3 +47,33 @@
 - Commands, viewports/devices and outcomes, with evidence paths
 - Decisions or limits that affect the next session
 - Next unfinished step
+
+## 2026-11-22 · Overnight scan quality run (paused early by owner)
+
+- Isolated work branch `work/scan-quality-overnight-20261122-153241` in new sibling worktree `../Lihatdulu-overnight-20261122-153241`, based on audited baseline `a26d952` (`origin/main`). Primary checkout and `var/scans` were not modified.
+- Fixed the confirmed `src/scan-viewer.js` defects: position is now `-R*c` (was `-c` while rotating), subject fit uses per-axis 1st/99th percentile splat centers with raw-box fallback, a self-contained subject orbit replaces the camera-translating SparkControls use, resize keeps the pose, and an explicit "Atur ulang" reset plus a deterministic `host.scanViewer` pose API were added. New pure helpers live in `src/scan-viewer-math.js`; 9 new unit tests. `npm run build` passes; `npm run test:unit` 206/206 pass.
+- New QA harness `scripts/qa-scan-views.mjs` renders fixed camera poses at 1440x900/390x844 against a run-local scan root (never the primary `var/scans`), with before/after and orbit-proof modes.
+- Diagnostics: all seven pinned SPZs verified; transform displacement was 1.64-1.95x robust radius on 6/7 takes. Golden COLMAP re-alignment preserved (76/76, 0.96 px); Brush 3000 reproduced (155.9 s, 27 406 splats) and a 6000-step run produced 68 076 splats in 285.9 s in the same gauge.
+- Key quality finding: percentile framing cannot isolate the chair because the scans are room-scale; a subject-region cleanup does. Intersecting the aligned camera axes gives a subject centre; a CPU PLY sphere filter (radius ~2.0-2.5 reconstruction units) followed by SPZ conversion turns the noisy room scan into a clean, multi-angle chair. Best result so far: 6000-step Golden + sphere 2.0 (`golden-q2-6000-sph20`, 5 958 splats) rendered clean from four matched angles.
+- Run evidence is local under `var/overnight/20261122-153241/` (`MORNING.md`, `HANDOFF.md`, `NEXT_SESSION_PROMPT.md`, `analysis/`, `comparisons/`, `best/`). Remaining work: confirm on Repeat, give the 10.03 s stress take its verdict, integrate the cleanup as an opt-in pipeline profile, regressions, and the physical-phone check.
+- Next unfinished step: resume from `var/overnight/20261122-153241/NEXT_SESSION_PROMPT.md`.
+## 2026-11-22 · Overnight scan quality run, continuation (best diagnostic result)
+
+- Same branch `work/scan-quality-overnight-20261122-153241` in `../Lihatdulu-overnight-20261122-153241`, HEAD `c51a704` on base `a26d952`. Primary checkout untouched; clips and `var/scans` untouched; evidence local under `var/overnight/20261122-153241/`.
+- The room-scale finding is now a shipped opt-in: `SCAN_PROFILE=chair` (or `profile: "chair"`) computes the subject centre from the aligned camera optical axes, keeps a sphere of `clamp(0.9 x r90 of the opaque mass about its own median, 1.8, 2.7)` and trains for the 6000 steps the rule was calibrated on. The default path is unchanged: no filter, no extra provenance key, same Brush and convert arguments.
+- Radius rule was chosen by measuring three parameterisations on Golden, not by preference: ray-centre r=2.0 cleanest, median-centred r=2.04 adds bottom fragments, ray-centre r=2.555 adds floor haze (10-13% of pixels changed). The shipped rule returns 2.042 for Golden, 2.528 for Repeat offline and 2.514 in a real pipeline run with a different alignment, so it converges across reconstructions. A 10.03 s take clamps at 2.7 and fails.
+- Real end-to-end `SCAN_PROFILE=chair` run on the Repeat clip: 420 s total (extract 2.8 s, align 99.3 s, Brush 6000 315.7 s, cleanup 0.4 s, convert 1.8 s), 4 993 splats, 108 707 bytes, provenance records `applied:true` and `trainSteps:6000`. A 3000-step export was rejected as too thin (1 711 splats, visible streaking).
+- Independent review found 13 items; the 8 substantive ones were fixed in `c51a704` (CRLF PLY headers, zero quaternions, near-parallel axes, non-finite vertices, wasted 6000-step budget, unguarded whole-PLY read, duplicated step constant, unpinned default budget) with 5 regression tests, so `tests/scan-cleanup.test.js` holds 20. `scripts/qa-scan-views.mjs` no longer overwrites a supplied `--jobs-root`, which had silently served the wrong job store.
+- Regression results on the integrated branch: `npm run build` pass; `npm run test:unit` 226/226; `npm run test:browser` 26/26; `verify-scan.mjs` 15/15; `--orbit-proof` 4/4; `--lifecycle-proof` 17/17 (three viewports keep pose and splat count, route exit disposes, back/reload return ready).
+- Visual gate not cleared. Golden: front-quarter clear, az030 streaked, az120/az210 dark with base haze. Repeat: partial, lower half smeared (opaque mass r90 2.81 vs 2.27). Stress: fails, 889 opaque splats within 3.0 of the target with the mass median 2.3 m away. The streaks survive every attribute filter tried (longest axis inside r=2.0 maxes at 1.274, below the 16x median cap), so they are view-dependent artefacts rather than a separable splat class.
+- A second independent review ran over `c51a704` and found the code sound but the evidence record inaccurate
+  in six places, all corrected in the run directory: the branch is seven commits over `a26d952` (the last
+  three are documentation and a clamp test, the newest being this note); `dist/` is tracked and its committed build is the stale `a26d952` baseline,
+  which makes `/pindai/<job>` fall back to the missing state until `npm run build` runs (reproduced);
+  `tests/scan-cleanup.test.js` holds 20 tests; the Repeat 6000 evidence is `renders/e2e-chair-6000` from job
+  `fbdd66b6-...` (4 993 splats, `state=ready`), while `renders/e2e-chair-3000` is the 3 000-step control
+  `56f03ae6-...` (1 711 splats); the wheel-base claim is withdrawn; and only the front quarter of the four
+  rendered poses reads cleanly. `npm run test:unit` re-run on `5e28473`: 226/226. Ledger entry `T3`.
+- Next unfinished step: investigate the view-dependent streaks with a second take's evidence (a
+  splat-attribute study, not another radius sweep), give Repeat a slower/longer capture, and complete the
+  physical-phone checklist in `MORNING.md`; no third review pass over `5e28473` was run.

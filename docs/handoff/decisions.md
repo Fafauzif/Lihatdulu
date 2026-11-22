@@ -16,6 +16,9 @@
 | Scan toolchain | Pin COLMAP 4.2.1 and Brush 0.3.0 locally under `var/tools` and resolve them with `SCAN_COLMAP` / `SCAN_BRUSH`; do not change the system PATH. | The demo laptop is reimaged or a second laptop is used. |
 | Real chair capture | Rear camera at 1080p; one slow orbit, preferably 15–25 s, at two heights with overlapping views; 3 fps base extraction (retry to 5–8 fps only when a VFR clip misses the 60-frame floor); 4K source is unnecessary after the 1280 downscale; side light for dark furniture. | A physical phone/tunnel run or a reshoot shows different quality. |
 
+| Subject framing | Keep the room-scale export and add an opt-in `SCAN_PROFILE=chair` profile: centre from the aligned camera optical axes, radius `clamp(0.9 x r90 of the opaque mass about its own median, 1.8, 2.7)`, 6000 training steps. Default scans stay unfiltered. | A take's mass cannot be measured (fewer than 3 usable cameras, near-parallel axes, damaged cloud), or a second take shows the sphere removing chair parts. |
+| Profile training budget | The chair profile trains 6000 steps, not the 3000-step default: after the room is removed, 3000 leaves 1 711 splats and visible streaking. The longer run costs about 2.5 min more on the demo laptop. | A faster reconstruction path reaches the same density, or scans must return in under about 5 minutes. |
+| Profile failure mode | A cleanup failure is never fatal: the job records `profile.applied:false` with the reason and exports the untouched cloud, so a take is never lost to the filter. | Provenance-free fallbacks are needed for a contract that requires the filtered result. |
 ## Still open
 
 - Phone model/browser, laptop OS and driver, available disk, actual clip quality and runtime.
