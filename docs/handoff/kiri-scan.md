@@ -130,8 +130,8 @@ otherwise `unconfigured` (upload answered with 503 `missing_key`, UI explains).
 ```sh
 npm ci
 npm run build              # dist is tracked and served by scan:serve
-npm run test:unit          # 206 pass / 0 fail
-npm run test:kiri          # 71 tests, mock adapter, HTTP boundary and cleanup
+npm run test:unit          # 230 pass / 0 fail
+npm run test:kiri          # 95 tests, mock adapter, HTTP boundary and cleanup
 npm run test:browser       # 26/26 existing marketplace acceptance
 npm run test:kiri:browser  # 16/16 mock browser checks, screenshots in var/kiri-qa
 npm run scan:mock          # http://127.0.0.1:8787/jual/pindai
@@ -191,6 +191,55 @@ Defects the live run exposed, each fixed with a test:
 Attempts 1–3 are kept under `var/kiri-live/attempts/`. Attempt 3 uploaded the
 clip but the `code: 200` bug rejected the answer and the serial was never stored;
 KIRI has no list endpoint, so that paid job cannot be recovered from here.
+
+## The overnight quality matrix (22–23 November 2026)
+
+The owner authorised a capped overnight matrix: eight credits total, one GPU
+lease, serial renders. Seven were spent. The pipeline held up on every job; the
+reconstruction never did.
+
+| # | Input | Mask | KIRI serial | Splats | Max extent | Render |
+|---|---|---|---|---|---|---|
+| 1 | `golden.mp4` (25 s) | off | lost to a runner bug | — | — | orphaned, unrecoverable |
+| 2 | `repeat.mp4` (20 s) | off | `093fabdefb2e4b5db8ae10df5e574eca` | 542 372 | 10.54 m | room soup |
+| 3 | 4K take, downscaled | off | `91733bdb660841b3bb90355ddceac229` | 463 764 | 9.77 m | room soup |
+| 4 | `t15` take | off | `070ec2f5216d477484a633baf3c98779` | 585 125 | 9.50 m | room soup |
+| 5 | 101 stills from `golden` | on | `0d884d60ba4d4c578a9fa22bb83dea87` | 212 144 | 4.58 m | melted chair blob |
+| 6 | 101 stills from `golden` | off | `08929a636d77431c9ec5fab3c287622c` | 681 844 | 10.97 m | coloured room smear |
+| 7 | 101 stills, featureless mesh | on | `b3217f601ab1485591c33bbea6951f3c` | — | — | submitted, last route |
+
+Measured, on the same machine and lease: video jobs took 24–27 min from submit
+to ready; stills jobs 13–21 min, of which ~93 s was the 101-image upload and
+10–11 min KIRI processing. A 154 MB result ZIP took about six minutes to
+download. The render harness itself failed twice on the 681 844-splat job: the
+real viewer needs more than 120 s to reach `data-state="ready"` under
+SwiftShader, so treat large exports as slow on software WebGL, not broken.
+
+Every render was taken with the same five poses through the real viewer and the
+same real conversion path, so the sheets compare like with like:
+`var/kiri-overnight/20261122-EVIDENCE.jpg` (input frame, four video results, two
+stills results, four subject-crop radii).
+
+**Verdict: still failing, and not because of the adapter.** The input frames are
+sharp and the chair fills 60–70 % of them
+(`var/kiri-overnight/scratch/frames-golden-sheet.jpg`), so framing and lighting
+are not the defect. KIRI turns a black mesh chair with glossy chrome into a
+low-opacity shell that has the chair's outline but none of its parts: the arms
+melt into the seat, the back frame closes into a slab, and the wheel base is
+absent. Automatic masking concentrates the model (extent 4.58 m against 10–11 m
+without it) but also makes it diverge, producing the melted blob.
+
+### Why the subject crop is not the answer
+
+`KIRI_CROP=subject` intersects the camera axes from `cameras.json` and cuts a
+sphere around that point, which is the right idea for a room-scale export. On
+these four captures it cannot work, for a measurable reason: the stored camera
+poses do not agree with each other. For each capture, every axis of every stored
+rotation was scored against the direction from that camera to the ring centroid;
+the best convention (third column, positive) still misses by 45–55° on average.
+The rays therefore meet 2–4 m from the subject, and the crop frames a blob
+(`var/kiri-overnight/scratch/p01sweep`, `p03sweep`). The profile stays off by
+default and is documented as a framing experiment, not a quality fix.
 
 ## Repeating the live test
 

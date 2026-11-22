@@ -1,5 +1,16 @@
 # Session log
 
+## 2026-11-23 · Overnight KIRI quality matrix: seven credits, pipeline proven, chair still fails
+
+- Branch `feat/kiri-scan` in `Lihatdulu-kiri-scan`; the primary checkout, its branches, raw footage and `var/` data were not touched. Nothing merged or deployed; evidence stays in git-ignored `var/kiri-overnight/`. Key only in git-ignored `.env`.
+- Budget: eight credits authorised, **seven spent**, **one left**. Job 1 (golden, mask off) lost its serial to a runner bug before it was stored and is unrecoverable — KIRI has no list endpoint. Jobs 2–4 were the three remaining clips with masking off; jobs 5–6 the same golden clip as 101 stills with masking on and off; job 7 the featureless-mesh route (`/v1/open/featureless/image`, GLB), the documented path for a textureless object, submitted 18:47 UTC.
+- Results: video exports are room-scale soups (542 372 / 463 764 / 585 125 splats, 9.5–10.5 m extents). Stills with masking on shrink to 4.58 m but melt into a blob; stills with masking off return a 10.97 m coloured room smear. Every job is `plausible: false` under the existing occupancy/extent check. Evidence sheet: `var/kiri-overnight/20261122-EVIDENCE.jpg`; per-job records under `20261122-live/`, `20261122-photo/`, `20261122-photo3/`.
+- The input is not the problem: the sampled frames are sharp, well lit and the chair fills 60–70 % of the frame (`var/kiri-overnight/scratch/frames-golden-sheet.jpg`). A black mesh chair with glossy chrome is close to the worst case for photogrammetry, and KIRI is not recovering it from any of the four takes.
+- New, tested, off by default: `KIRI_CROP=subject` intersects the camera axes in `cameras.json` and cuts a sphere around that point before conversion, recording centre, radius and removed splats. It fixes framing for a well-posed capture, but not here: measured against the camera-ring centroid, the best rotation convention still misses by 45–55° on these captures, so the rays meet 2–4 m off the chair and the crop frames a blob. Commit `052bca8`.
+- Commands/results: `npm run test:unit` 230 pass / 0 fail; `npm run test:kiri` 95 pass / 0 fail; `npm run build` succeeds (existing >500 kB chunk warning); `npm run test:kiri:browser` 16/16 mock checks. `dist/` was restored to HEAD after the build, as before.
+- Render-harness finding worth keeping: the real viewer needs more than 120 s to reach `data-state="ready"` for a 681 844-splat SPZ under SwiftShader. Large exports are slow on software WebGL, not necessarily broken; keep the timeout generous in QA.
+- Next unfinished step: job 7's mesh verdict. If the GLB is a usable chair, add GLB artifacts (`validateGlb`, ZIP mesh entry, `model/gltf-binary` serving, GLTFLoader branch in `src/scan-viewer.js`) and present it. If not, hold the last credit for a new capture — matte upholstery, no glass or chrome, plain wall behind, one slow 360° orbit at chest height — rather than another transform of the same clip.
+
 ## 2026-11-22 · KIRI live run: pipeline proven, model fails the visual gate
 
 - Branch `feat/kiri-scan` in the worktree `Lihatdulu-kiri-scan`; one live job paid with the owner's key, which lives only in git-ignored `.env` and never reached the tree, the bundle or a log. Architecture and the repeat command: [kiri-scan.md](kiri-scan.md).
