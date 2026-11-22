@@ -1,0 +1,216 @@
+{
+  "schema": 1,
+  "runId": "20261122-153241",
+  "startedAt": "2026-11-22T15:32:41+07:00",
+  "pausedAt": "2026-11-22T16:25:00+07:00",
+  "deadlineIfContinued": "2026-11-22T21:32:41+07:00",
+  "state": "continued-then-closed-best-diagnostic",
+  "goal": "Best inspectable 3D chair from existing footage/SPZs; quality first, opt-in integration, evidence local.",
+  "originalCheckout": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu",
+  "primaryHead": "c4b3192b0cb5d45ef2f46beb6b33c0108c115762",
+  "primaryBranch": "feat/scan-video-study",
+  "primaryTouched": false,
+  "baseCommit": "a26d952c54b5f67a869c1a15c8839be05fb81aad",
+  "evidenceWorktree": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu-evidence-cbf69f0",
+  "evidenceCommit": "cbf69f09fbb41eacaa8ea40e6e6cb55ceec61e4c",
+  "implWorktree": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu-overnight-20261122-153241",
+  "implBranch": "work/scan-quality-overnight-20261122-153241",
+  "implCommit": "d001013",
+  "implCommitSubject": "docs(scan): record the verification pass that closed the run",
+  "runDir": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241",
+  "gpu": {
+    "device": "NVIDIA GeForce RTX 4060 Laptop GPU, 8188 MiB, driver 581.80",
+    "policy": "single lease; no GPU process was left running at the pause"
+  },
+  "tools": {
+    "node": "v24.19.0",
+    "npm": "11.17.0",
+    "ffmpeg": "8.1.2-full_build-www.gyan.dev",
+    "colmap": "COLMAP 4.2.1 (Commit bd1fcf6 with CUDA)",
+    "brush": "brush-cli 0.3.0",
+    "splatTransform": "splat-transform v3.12.0 (5d5be2b)"
+  },
+  "bestResult": {
+    "id": "golden-q2-6000-sph20",
+    "description": "Golden 25.35 s -> preserved 76/76 COLMAP alignment -> Brush 6000 steps (68 076 splats) -> subject sphere from the camera-axis target, radius clamp(0.9 x r90 opaque, 1.8, 2.7) = 2.042 -> SPZ",
+    "spz": "var\\overnight\\20261122-153241\\best\\chair-q2-6000-sph20.spz",
+    "jobId": "6bbc9bf5-e44b-4989-99cf-4fd7852634ff",
+    "jobOpenRoot": "var\\overnight\\20261122-153241\\best\\open",
+    "splats": 5958,
+    "bytes": 124705,
+    "evidence": [
+      "best\\chair-candidates-sheet.jpg",
+      "best\\04-az210-el015-d1000-viewer.png",
+      "best\\03-az120-el015-d1000-viewer.png",
+      "best\\02-az030-el015-d1000-viewer.png",
+      "best\\01-az290-el015-d1000-viewer.png",
+      "best\\before-after-sheet.jpg",
+      "best\\viewer-sweep-sheet.jpg"
+    ],
+    "verdict": "best observed: az290 reads as a chair (backrest, seat, arms); az030 streaked through the arms; az120/az210 dark with base haze. Partial against the visual gate, not promoted. Wheel-base detail is not reliably visible.",
+    "shippedPathEquivalent": {
+      "jobId": "031cffdc-71e0-40ab-a43d-7f251611891b",
+      "splats": 6096,
+      "bytes": 127554,
+      "jobsRoot": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\jobs"
+    }
+  },
+  "measured": {
+    "alignGolden": {
+      "frames": 76,
+      "registered": 76,
+      "featureMs": 6296,
+      "matchMs": 45073,
+      "mapperMs": 119365,
+      "model": "sparse/0"
+    },
+    "brush3000": {
+      "steps": 3000,
+      "ms": 155906,
+      "splats": 27406,
+      "spzBytes": 545503
+    },
+    "brush6000": {
+      "steps": 6000,
+      "ms": 285918,
+      "splats": 68076,
+      "spzBytes": 1499291
+    },
+    "viewerBaseline": {
+      "placementBug": "position=-center with 180deg X rotation displaces world centre by |R*c-c|; 1.64-1.95x robust radius on 6/7 takes, Golden 0.53R",
+      "rawViewStillCluttered": "1-99 percentile fit radius 8.338 of a 16.675 diagonal on Golden; room/haze still dominates raw SPZs"
+    }
+  },
+  "verification": {
+    "unitSuite": "226/226 pass (npm run test:unit; includes 20 tests in tests/scan-cleanup.test.js; re-run on HEAD 5e28473)",
+    "browserSuite": "26/26 pass (npm run test:browser, QA_OUTPUT qa/v8-browser-final)",
+    "scanSimulated": "15/15 pass (node scripts/verify-scan.mjs, qa/scan-simulated-final)",
+    "orbitProof": "4/4 pass (qa/orbit-proof-final/report.json)",
+    "lifecycleProof": "17/17 pass (qa/lifecycle-final/report.json)",
+    "build": "npm run build passes",
+    "realPipeline": "SCAN_PROFILE=chair on the Repeat clip: 4993 splats, r=2.514, provenance.profile applied:true",
+    "review": "independent review child over 5f782ae: 13 findings, 8 fixed, 5 regression tests added (R1) -> tests/scan-cleanup.test.js holds 20",
+    "notRun": [
+      "third review pass over 5e28473",
+      "Golden through the full pipeline this session",
+      "physical phone",
+      "phone over HTTPS"
+    ],
+    "verificationPass": "second review child over c51a704 confirmed the code findings and caught 6 documentation/evidence defects, all corrected (commit list/HEAD, dist wording, test counts, Repeat 6000 render path, wheel-base claim, view-count wording)",
+    "matchedRenders": "qa-scan-views.mjs on the recorded jobs with a freshly built dist: renders/e2e-chair-6000 state=ready splats=4993, renders/e2e-chair-3000 state=ready splats=1711; a stale tracked dist yields state=missing"
+  },
+  "phases": [
+    {
+      "phase": "0-setup",
+      "status": "done",
+      "detail": "run dir, LATEST, preflight, worktrees, npm ci, fixtures, tool help"
+    },
+    {
+      "phase": "A-viewer",
+      "status": "done",
+      "detail": "placement/orbit/reset/pose API fixed and committed; orbit-proof 4/4 and lifecycle-proof 17/17 (1024x768, 390x844, 1440x900, route re-entry, reload)"
+    },
+    {
+      "phase": "A-assets",
+      "status": "done",
+      "detail": "subject-sphere cleanup validated on Golden (r=2.042) and Repeat (r=2.528 offline, 2.514 in the real pipeline); attribute filters rejected"
+    },
+    {
+      "phase": "B-reconstruction",
+      "status": "done",
+      "detail": "Golden 6000 from the preserved alignment; Repeat aligned fresh (60/60 at 0.898 px) and trained at 6000; stress take 6000 graded as a failure"
+    },
+    {
+      "phase": "H1-confirmation",
+      "status": "done-with-gaps",
+      "detail": "Golden partial (front quarter only), Repeat partial, stress fail; config frozen but not promoted to the default profile"
+    },
+    {
+      "phase": "P1-speed",
+      "status": "pending",
+      "detail": "not started; quality-first"
+    },
+    {
+      "phase": "I1-integration",
+      "status": "done",
+      "detail": "opt-in SCAN_PROFILE=chair in server/scan-pipeline.mjs with provenance profile record; default path unchanged; 20 tests in tests/scan-cleanup.test.js"
+    },
+    {
+      "phase": "V-verify",
+      "status": "done",
+      "detail": "unit 226/226, browser 26/26, verify-scan 15/15, orbit-proof 4/4, lifecycle-proof 17/17, real chair run 4993 splats, matched re-renders confirmed"
+    }
+  ],
+  "nextActions": [
+    "Retake guidance: 20 s+ orbit at chest height, chair filling the frame, even light (the stress take shows what fails).",
+    "Investigate view-dependent streaks with a splat-attribute study from a second take, not by tuning radius.",
+    "Physical phone pass per MORNING.md: permission, resolution, upload, real processing, first view, orbit, reload, one genuine failure."
+  ],
+  "knownIssues": [
+    "Only the front-quarter view of Golden reads cleanly; az030 streaks, az120/az210 are dark with base haze.",
+    "Repeat lower half smears even at the calibrated radius; its opaque mass is softer (r90 2.81 vs 2.27).",
+    "Stress take fails: 889 opaque splats within 3.0 of the ray target, mass median 2.3 m away.",
+    "dist/ is tracked and the committed build is the stale a26d952 baseline: serving it makes /pindai/<job> fall back to the missing state, so run npm run build before previewing."
+  ],
+  "artifacts": {
+    "jobs": "var\\overnight\\20261122-153241\\jobs (19 run-local ready job fixtures; keep>=19 when serving)",
+    "datasets": "var\\overnight\\20261122-153241\\datasets\\golden-25.35 (reusable aligned dataset + sparse model)",
+    "train": "var\\overnight\\20261122-153241\\train\\golden-3000 and golden-6000 (PLY exports)",
+    "candidates": "var\\overnight\\20261122-153241\\candidates",
+    "analysis": "var\\overnight\\20261122-153241\\analysis",
+    "comparisons": "var\\overnight\\20261122-153241\\comparisons",
+    "best": "var\\overnight\\20261122-153241\\best",
+    "logs": "var\\overnight\\20261122-153241\\logs",
+    "renders": "renders/{rule-final,repeat-rule,e2e-chair-6000,e2e-chair-3000,stress-full,stress-rule} (four matched poses each)",
+    "jobsE2E": "jobs-e2e (fbdd66b6-... real SCAN_PROFILE=chair run; 56f03ae6-... 3000-step control)"
+  },
+  "handoffDocs": [
+    "MORNING.md",
+    "HANDOFF.md",
+    "NEXT_SESSION_PROMPT.md"
+  ],
+  "resumedAt": "2026-11-22T16:40:00+07:00",
+  "implCommits": [
+    "6363101 fix(scan): correct viewer placement and add subject orbit with QA harness",
+    "24c0e04 test(scan): add lifecycle proof for resize, route re-entry and reload",
+    "5f782ae feat(scan): opt-in chair cleanup profile for room-scale splat exports",
+    "c51a704 fix(scan): harden the chair profile against damaged input and pay only for usable runs",
+    "58148a1 docs(scan): record the chair profile decision and the continuation session",
+    "5e28473 test(scan): pin the radius clamps instead of asserting they hold",
+    "d001013 docs(scan): record the verification pass that closed the run"
+  ],
+  "profile": {
+    "env": "SCAN_PROFILE=chair",
+    "defaults": "name chair, radiusFactor 0.9, minRadius 1.8, maxRadius 2.7, opaqueAlpha 0.2, probeRadius 3.0, minKeptSplats 200, trainSteps 6000",
+    "measured": {
+      "golden": {
+        "radius": 2.042,
+        "kept": 6096,
+        "before": 68076
+      },
+      "repeatOffline": {
+        "radius": 2.528,
+        "kept": 5015,
+        "before": 52026
+      },
+      "repeatPipeline": {
+        "radius": 2.514,
+        "kept": 4993,
+        "before": 51940
+      },
+      "stress": {
+        "radius": 2.7,
+        "kept": 1155,
+        "before": 70725
+      }
+    },
+    "timings": {
+      "repeatPipelineTotalMs": 419908,
+      "extractMs": 2767,
+      "alignMs": 99271,
+      "trainMs": 315668,
+      "cleanupMs": 400,
+      "convertMs": 1802
+    }
+  }
+}

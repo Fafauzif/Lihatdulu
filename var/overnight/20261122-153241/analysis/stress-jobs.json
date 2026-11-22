@@ -1,0 +1,14 @@
+{
+  "stress-full": {
+    "id": "6f79d0d1-f2e1-4950-9428-b405e5d9f815",
+    "spz": "candidates/stress-full.spz",
+    "splats": 70725,
+    "bytes": 1546645
+  },
+  "stress-rule": {
+    "id": "1a3f86e9-aa30-450e-900f-adf8afd11815",
+    "spz": "candidates/stress-rule.spz",
+    "splats": 1155,
+    "bytes": 24644
+  }
+}

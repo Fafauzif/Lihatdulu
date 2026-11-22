@@ -1,0 +1,594 @@
+{
+  "generatedAt": "2026-11-22T08:54:03.418582+00:00",
+  "takes": [
+    {
+      "key": "golden",
+      "jobId": "0283ca80-8f9c-4fa4-85a6-f0edb5fc962c",
+      "label": "Golden 25.35 s (tuning)",
+      "takeDurationS": 25.35,
+      "jobJsonPath": "jobs\\0283ca80-8f9c-4fa4-85a6-f0edb5fc962c\\job.json",
+      "jobJsonParses": true,
+      "spzPath": "jobs\\0283ca80-8f9c-4fa4-85a6-f0edb5fc962c\\output\\scan.spz",
+      "spzBytes": 544854,
+      "spzHeader": {
+        "magic": "0x5053474e",
+        "version": 4,
+        "numPoints": 27447,
+        "shDegree": 3,
+        "fractionalBits": 12,
+        "flags": 0,
+        "reserved": 6,
+        "bytes": 544854
+      },
+      "csvRows": 27447,
+      "stills": [
+        {
+          "name": "000.jpg",
+          "bytes": 291019
+        },
+        {
+          "name": "001.jpg",
+          "bytes": 278481
+        },
+        {
+          "name": "002.jpg",
+          "bytes": 275760
+        }
+      ],
+      "jobArtifact": {
+        "format": "spz",
+        "bytes": 544854,
+        "splatCount": 27447,
+        "file": "scan.spz",
+        "stills": [
+          "000.jpg",
+          "001.jpg",
+          "002.jpg"
+        ]
+      },
+      "jobMedia": {
+        "contentType": "video/mp4",
+        "bytes": 64274172,
+        "durationS": 25.3,
+        "width": 1920,
+        "height": 1080
+      },
+      "jobMeta": {
+        "title": "VID_20261121_184227976",
+        "widthCm": 60,
+        "depthCm": 60,
+        "heightCm": 100,
+        "conditionNote": "Uji klip pindai, bukan listing.",
+        "device": "clip study"
+      },
+      "jobFrames": {
+        "extracted": 76,
+        "registered": 76,
+        "ratio": 1
+      },
+      "jobTimings": {
+        "extractMs": 2730,
+        "alignMs": 128856,
+        "trainMs": 158546,
+        "convertMs": 1149,
+        "totalMs": 291281
+      },
+      "jobStage": "ready",
+      "jobError": null,
+      "declaredBytes": 544854,
+      "declaredSplatCount": 27447,
+      "bytesMatch": true,
+      "countMatchesHeader": true,
+      "countMatchesCsv": true,
+      "bytesPerSplat": 19.8511,
+      "stillsMatch": true,
+      "artifactFile": "scan.spz",
+      "pass": true
+    },
+    {
+      "key": "repeat",
+      "jobId": "a3e551df-7e05-4d0c-8146-d2a686a8d30a",
+      "label": "Repeat 20.13 s (confirmation)",
+      "takeDurationS": 20.13,
+      "jobJsonPath": "jobs\\a3e551df-7e05-4d0c-8146-d2a686a8d30a\\job.json",
+      "jobJsonParses": true,
+      "spzPath": "jobs\\a3e551df-7e05-4d0c-8146-d2a686a8d30a\\output\\scan.spz",
+      "spzBytes": 495405,
+      "spzHeader": {
+        "magic": "0x5053474e",
+        "version": 4,
+        "numPoints": 25181,
+        "shDegree": 3,
+        "fractionalBits": 12,
+        "flags": 0,
+        "reserved": 6,
+        "bytes": 495405
+      },
+      "csvRows": 25181,
+      "stills": [
+        {
+          "name": "000.jpg",
+          "bytes": 292103
+        },
+        {
+          "name": "001.jpg",
+          "bytes": 236323
+        },
+        {
+          "name": "002.jpg",
+          "bytes": 271278
+        }
+      ],
+      "jobArtifact": {
+        "format": "spz",
+        "bytes": 495405,
+        "splatCount": 25181,
+        "file": "scan.spz",
+        "stills": [
+          "000.jpg",
+          "001.jpg",
+          "002.jpg"
+        ]
+      },
+      "jobMedia": {
+        "contentType": "video/mp4",
+        "bytes": 51012275,
+        "durationS": 20.1,
+        "width": 1920,
+        "height": 1080
+      },
+      "jobMeta": {
+        "title": "VID_20261121_184349140",
+        "widthCm": 60,
+        "depthCm": 60,
+        "heightCm": 100,
+        "conditionNote": "Uji klip pindai, bukan listing.",
+        "device": "clip study"
+      },
+      "jobFrames": {
+        "extracted": 60,
+        "registered": 60,
+        "ratio": 1
+      },
+      "jobTimings": {
+        "extractMs": 6244,
+        "alignMs": 119804,
+        "trainMs": 162142,
+        "convertMs": 1528,
+        "totalMs": 289718
+      },
+      "jobStage": "ready",
+      "jobError": null,
+      "declaredBytes": 495405,
+      "declaredSplatCount": 25181,
+      "bytesMatch": true,
+      "countMatchesHeader": true,
+      "countMatchesCsv": true,
+      "bytesPerSplat": 19.6738,
+      "stillsMatch": true,
+      "artifactFile": "scan.spz",
+      "pass": true
+    },
+    {
+      "key": "stress-10.03",
+      "jobId": "f4755525-a4e8-4eb8-a279-5b8adb45c6ad",
+      "label": "10.03 s stress",
+      "takeDurationS": 10.03,
+      "jobJsonPath": "jobs\\f4755525-a4e8-4eb8-a279-5b8adb45c6ad\\job.json",
+      "jobJsonParses": true,
+      "spzPath": "jobs\\f4755525-a4e8-4eb8-a279-5b8adb45c6ad\\output\\scan.spz",
+      "spzBytes": 708640,
+      "spzHeader": {
+        "magic": "0x5053474e",
+        "version": 4,
+        "numPoints": 34342,
+        "shDegree": 3,
+        "fractionalBits": 12,
+        "flags": 0,
+        "reserved": 6,
+        "bytes": 708640
+      },
+      "csvRows": 34342,
+      "stills": [
+        {
+          "name": "000.jpg",
+          "bytes": 288550
+        },
+        {
+          "name": "001.jpg",
+          "bytes": 297202
+        },
+        {
+          "name": "002.jpg",
+          "bytes": 161595
+        }
+      ],
+      "jobArtifact": {
+        "format": "spz",
+        "bytes": 708640,
+        "splatCount": 34342,
+        "file": "scan.spz",
+        "stills": [
+          "000.jpg",
+          "001.jpg",
+          "002.jpg"
+        ]
+      },
+      "jobMedia": {
+        "contentType": "video/mp4",
+        "bytes": 25541807,
+        "durationS": 10,
+        "width": 1920,
+        "height": 1080
+      },
+      "jobMeta": {
+        "title": "VID_20261121_184212135",
+        "widthCm": 60,
+        "depthCm": 60,
+        "heightCm": 100,
+        "conditionNote": "Uji klip pindai, bukan listing.",
+        "device": "clip study"
+      },
+      "jobFrames": {
+        "extracted": 60,
+        "registered": 60,
+        "ratio": 1
+      },
+      "jobTimings": {
+        "extractMs": 1479,
+        "alignMs": 166342,
+        "trainMs": 164537,
+        "convertMs": 515,
+        "totalMs": 332873
+      },
+      "jobStage": "ready",
+      "jobError": null,
+      "declaredBytes": 708640,
+      "declaredSplatCount": 34342,
+      "bytesMatch": true,
+      "countMatchesHeader": true,
+      "countMatchesCsv": true,
+      "bytesPerSplat": 20.6348,
+      "stillsMatch": true,
+      "artifactFile": "scan.spz",
+      "pass": true
+    },
+    {
+      "key": "sweep-10.21",
+      "jobId": "15d33c98-46e5-4bb0-90dc-bbe86ffc21f9",
+      "label": "10.21 s sweep",
+      "takeDurationS": 10.21,
+      "jobJsonPath": "jobs\\15d33c98-46e5-4bb0-90dc-bbe86ffc21f9\\job.json",
+      "jobJsonParses": true,
+      "spzPath": "jobs\\15d33c98-46e5-4bb0-90dc-bbe86ffc21f9\\output\\scan.spz",
+      "spzBytes": 523603,
+      "spzHeader": {
+        "magic": "0x5053474e",
+        "version": 4,
+        "numPoints": 25811,
+        "shDegree": 3,
+        "fractionalBits": 12,
+        "flags": 0,
+        "reserved": 6,
+        "bytes": 523603
+      },
+      "csvRows": 25811,
+      "stills": [
+        {
+          "name": "000.jpg",
+          "bytes": 271593
+        },
+        {
+          "name": "001.jpg",
+          "bytes": 235395
+        },
+        {
+          "name": "002.jpg",
+          "bytes": 190160
+        }
+      ],
+      "jobArtifact": {
+        "format": "spz",
+        "bytes": 523603,
+        "splatCount": 25811,
+        "file": "scan.spz",
+        "stills": [
+          "000.jpg",
+          "001.jpg",
+          "002.jpg"
+        ]
+      },
+      "jobMedia": {
+        "contentType": "video/mp4",
+        "bytes": 25903775,
+        "durationS": 10.2,
+        "width": 1920,
+        "height": 1080
+      },
+      "jobMeta": {
+        "title": "VID_20261121_184320272",
+        "widthCm": 60,
+        "depthCm": 60,
+        "heightCm": 100,
+        "conditionNote": "Uji klip pindai, bukan listing.",
+        "device": "clip study"
+      },
+      "jobFrames": {
+        "extracted": 60,
+        "registered": 60,
+        "ratio": 1
+      },
+      "jobTimings": {
+        "extractMs": 1646,
+        "alignMs": 106862,
+        "trainMs": 135113,
+        "convertMs": 521,
+        "totalMs": 244142
+      },
+      "jobStage": "ready",
+      "jobError": null,
+      "declaredBytes": 523603,
+      "declaredSplatCount": 25811,
+      "bytesMatch": true,
+      "countMatchesHeader": true,
+      "countMatchesCsv": true,
+      "bytesPerSplat": 20.286,
+      "stillsMatch": true,
+      "artifactFile": "scan.spz",
+      "pass": true
+    },
+    {
+      "key": "sweep-14.59",
+      "jobId": "bb588361-7337-490d-9dbf-2ce9492ca3b1",
+      "label": "14.59 s sweep",
+      "takeDurationS": 14.59,
+      "jobJsonPath": "jobs\\bb588361-7337-490d-9dbf-2ce9492ca3b1\\job.json",
+      "jobJsonParses": true,
+      "spzPath": "jobs\\bb588361-7337-490d-9dbf-2ce9492ca3b1\\output\\scan.spz",
+      "spzBytes": 538833,
+      "spzHeader": {
+        "magic": "0x5053474e",
+        "version": 4,
+        "numPoints": 27466,
+        "shDegree": 3,
+        "fractionalBits": 12,
+        "flags": 0,
+        "reserved": 6,
+        "bytes": 538833
+      },
+      "csvRows": 27466,
+      "stills": [
+        {
+          "name": "000.jpg",
+          "bytes": 293795
+        },
+        {
+          "name": "001.jpg",
+          "bytes": 253341
+        },
+        {
+          "name": "002.jpg",
+          "bytes": 233293
+        }
+      ],
+      "jobArtifact": {
+        "format": "spz",
+        "bytes": 538833,
+        "splatCount": 27466,
+        "file": "scan.spz",
+        "stills": [
+          "000.jpg",
+          "001.jpg",
+          "002.jpg"
+        ]
+      },
+      "jobMedia": {
+        "contentType": "video/mp4",
+        "bytes": 36955391,
+        "durationS": 14.6,
+        "width": 1920,
+        "height": 1080
+      },
+      "jobMeta": {
+        "title": "VID_20261121_184453628",
+        "widthCm": 60,
+        "depthCm": 60,
+        "heightCm": 100,
+        "conditionNote": "Uji klip pindai, bukan listing.",
+        "device": "clip study"
+      },
+      "jobFrames": {
+        "extracted": 72,
+        "registered": 72,
+        "ratio": 1
+      },
+      "jobTimings": {
+        "extractMs": 2400,
+        "alignMs": 113234,
+        "trainMs": 143254,
+        "convertMs": 489,
+        "totalMs": 259377
+      },
+      "jobStage": "ready",
+      "jobError": null,
+      "declaredBytes": 538833,
+      "declaredSplatCount": 27466,
+      "bytesMatch": true,
+      "countMatchesHeader": true,
+      "countMatchesCsv": true,
+      "bytesPerSplat": 19.6182,
+      "stillsMatch": true,
+      "artifactFile": "scan.spz",
+      "pass": true
+    },
+    {
+      "key": "sweep-15.00",
+      "jobId": "e8d4c2a3-e898-422e-9d83-a9f2dd1b6cbe",
+      "label": "15.00 s sweep",
+      "takeDurationS": 15.0,
+      "jobJsonPath": "jobs\\e8d4c2a3-e898-422e-9d83-a9f2dd1b6cbe\\job.json",
+      "jobJsonParses": true,
+      "spzPath": "jobs\\e8d4c2a3-e898-422e-9d83-a9f2dd1b6cbe\\output\\scan.spz",
+      "spzBytes": 651694,
+      "spzHeader": {
+        "magic": "0x5053474e",
+        "version": 4,
+        "numPoints": 33284,
+        "shDegree": 3,
+        "fractionalBits": 12,
+        "flags": 0,
+        "reserved": 6,
+        "bytes": 651694
+      },
+      "csvRows": 33284,
+      "stills": [
+        {
+          "name": "000.jpg",
+          "bytes": 293706
+        },
+        {
+          "name": "001.jpg",
+          "bytes": 209233
+        },
+        {
+          "name": "002.jpg",
+          "bytes": 248181
+        }
+      ],
+      "jobArtifact": {
+        "format": "spz",
+        "bytes": 651694,
+        "splatCount": 33284,
+        "file": "scan.spz",
+        "stills": [
+          "000.jpg",
+          "001.jpg",
+          "002.jpg"
+        ]
+      },
+      "jobMedia": {
+        "contentType": "video/mp4",
+        "bytes": 38014024,
+        "durationS": 15,
+        "width": 1920,
+        "height": 1080
+      },
+      "jobMeta": {
+        "title": "VID_20261121_184626753",
+        "widthCm": 60,
+        "depthCm": 60,
+        "heightCm": 100,
+        "conditionNote": "Uji klip pindai, bukan listing.",
+        "device": "clip study"
+      },
+      "jobFrames": {
+        "extracted": 74,
+        "registered": 74,
+        "ratio": 1
+      },
+      "jobTimings": {
+        "extractMs": 3020,
+        "alignMs": 130291,
+        "trainMs": 135725,
+        "convertMs": 503,
+        "totalMs": 269539
+      },
+      "jobStage": "ready",
+      "jobError": null,
+      "declaredBytes": 651694,
+      "declaredSplatCount": 33284,
+      "bytesMatch": true,
+      "countMatchesHeader": true,
+      "countMatchesCsv": true,
+      "bytesPerSplat": 19.5798,
+      "stillsMatch": true,
+      "artifactFile": "scan.spz",
+      "pass": true
+    },
+    {
+      "key": "sweep-4k-14.62",
+      "jobId": "37a5694c-e960-46d2-84cb-38eafdb4f134",
+      "label": "4K 14.62 s sweep",
+      "takeDurationS": 14.62,
+      "jobJsonPath": "jobs\\37a5694c-e960-46d2-84cb-38eafdb4f134\\job.json",
+      "jobJsonParses": true,
+      "spzPath": "jobs\\37a5694c-e960-46d2-84cb-38eafdb4f134\\output\\scan.spz",
+      "spzBytes": 353915,
+      "spzHeader": {
+        "magic": "0x5053474e",
+        "version": 4,
+        "numPoints": 18461,
+        "shDegree": 3,
+        "fractionalBits": 12,
+        "flags": 0,
+        "reserved": 6,
+        "bytes": 353915
+      },
+      "csvRows": 18461,
+      "stills": [
+        {
+          "name": "000.jpg",
+          "bytes": 418979
+        },
+        {
+          "name": "001.jpg",
+          "bytes": 242111
+        },
+        {
+          "name": "002.jpg",
+          "bytes": 339507
+        }
+      ],
+      "jobArtifact": {
+        "format": "spz",
+        "bytes": 353915,
+        "splatCount": 18461,
+        "file": "scan.spz",
+        "stills": [
+          "000.jpg",
+          "001.jpg",
+          "002.jpg"
+        ]
+      },
+      "jobMedia": {
+        "contentType": "video/mp4",
+        "bytes": 89837789,
+        "durationS": 14.6,
+        "width": 3840,
+        "height": 2160
+      },
+      "jobMeta": {
+        "title": "VID_20261121_184714115",
+        "widthCm": 60,
+        "depthCm": 60,
+        "heightCm": 100,
+        "conditionNote": "Uji klip pindai, bukan listing.",
+        "device": "clip study"
+      },
+      "jobFrames": {
+        "extracted": 71,
+        "registered": 71,
+        "ratio": 1
+      },
+      "jobTimings": {
+        "extractMs": 3874,
+        "alignMs": 105922,
+        "trainMs": 134968,
+        "convertMs": 458,
+        "totalMs": 245222
+      },
+      "jobStage": "ready",
+      "jobError": null,
+      "declaredBytes": 353915,
+      "declaredSplatCount": 18461,
+      "bytesMatch": true,
+      "countMatchesHeader": true,
+      "countMatchesCsv": true,
+      "bytesPerSplat": 19.171,
+      "stillsMatch": true,
+      "artifactFile": "scan.spz",
+      "pass": true
+    }
+  ],
+  "allPass": true
+}

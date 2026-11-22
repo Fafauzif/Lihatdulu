@@ -1,0 +1,20 @@
+﻿{
+  "q2-sph20": {
+    "id": "6bbc9bf5-e44b-4989-99cf-4fd7852634ff",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\golden-q2-6000-sph20.spz",
+    "splats": 5958,
+    "bytes": 124705
+  },
+  "q2-sph25": {
+    "id": "fa8702f0-c73a-40d0-b3bc-89ef30fea838",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\golden-q2-6000-sph25.spz",
+    "splats": 1,
+    "bytes": 218
+  },
+  "q2-sph30": {
+    "id": "ca941547-257d-4e73-8028-d75411682f1a",
+    "spz": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\overnight\\20261122-153241\\candidates\\golden-q2-6000-sph30.spz",
+    "splats": 8903,
+    "bytes": 188916
+  }
+}

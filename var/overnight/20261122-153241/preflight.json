@@ -1,0 +1,273 @@
+﻿{
+  "root": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu",
+  "clips": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\spike\\clips",
+  "evidence": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu",
+  "node": "v24.19.0",
+  "branch": "feat/scan-video-study",
+  "head": "c4b3192b0cb5d45ef2f46beb6b33c0108c115762",
+  "originMain": "a26d952c54b5f67a869c1a15c8839be05fb81aad",
+  "fetchedEvidence": "cbf69f09fbb41eacaa8ea40e6e6cb55ceec61e4c",
+  "expectedEvidence": "cbf69f09fbb41eacaa8ea40e6e6cb55ceec61e4c",
+  "workingTree": "?? overnight-scan/",
+  "freeGiB": 197.6,
+  "toolCandidates": {
+    "ffmpeg": "C:\\Users\\fauzi\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe",
+    "ffprobe": "C:\\Users\\fauzi\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffprobe.exe",
+    "colmap": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\tools\\colmap\\bin\\colmap.exe",
+    "brush": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\tools\\brush\\brush_app.exe"
+  },
+  "takes": [
+    {
+      "name": "Golden",
+      "role": "tuning",
+      "clip": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\spike\\clips\\VID_20261121_184227976.mp4",
+      "clipExists": true,
+      "evidence": [
+        {
+          "path": "var/scans/0283ca80-8f9c-4fa4-85a6-f0edb5fc962c/output/scan.spz",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/0283ca80-8f9c-4fa4-85a6-f0edb5fc962c/job.json",
+          "status": "mismatch"
+        },
+        {
+          "path": "var/scans/0283ca80-8f9c-4fa4-85a6-f0edb5fc962c/stills/000.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/0283ca80-8f9c-4fa4-85a6-f0edb5fc962c/stills/001.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/0283ca80-8f9c-4fa4-85a6-f0edb5fc962c/stills/002.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184227/viewer-1440.png",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184227/viewer-390.png",
+          "status": "match"
+        }
+      ]
+    },
+    {
+      "name": "Repeat",
+      "role": "confirmation",
+      "clip": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\spike\\clips\\VID_20261121_184349140.mp4",
+      "clipExists": true,
+      "evidence": [
+        {
+          "path": "var/scans/a3e551df-7e05-4d0c-8146-d2a686a8d30a/output/scan.spz",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/a3e551df-7e05-4d0c-8146-d2a686a8d30a/job.json",
+          "status": "mismatch"
+        },
+        {
+          "path": "var/scans/a3e551df-7e05-4d0c-8146-d2a686a8d30a/stills/000.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/a3e551df-7e05-4d0c-8146-d2a686a8d30a/stills/001.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/a3e551df-7e05-4d0c-8146-d2a686a8d30a/stills/002.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184349/viewer-1440.png",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184349/viewer-390.png",
+          "status": "match"
+        }
+      ]
+    },
+    {
+      "name": "Variant 10.03 s",
+      "role": "stress",
+      "clip": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\spike\\clips\\VID_20261121_184212135.mp4",
+      "clipExists": true,
+      "evidence": [
+        {
+          "path": "var/scans/f4755525-a4e8-4eb8-a279-5b8adb45c6ad/output/scan.spz",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/f4755525-a4e8-4eb8-a279-5b8adb45c6ad/job.json",
+          "status": "mismatch"
+        },
+        {
+          "path": "var/scans/f4755525-a4e8-4eb8-a279-5b8adb45c6ad/stills/000.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/f4755525-a4e8-4eb8-a279-5b8adb45c6ad/stills/001.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/f4755525-a4e8-4eb8-a279-5b8adb45c6ad/stills/002.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184212/viewer-1440.png",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184212/viewer-390.png",
+          "status": "match"
+        }
+      ]
+    },
+    {
+      "name": "Variant 10.21 s",
+      "role": "sweep",
+      "clip": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\spike\\clips\\VID_20261121_184320272.mp4",
+      "clipExists": true,
+      "evidence": [
+        {
+          "path": "var/scans/15d33c98-46e5-4bb0-90dc-bbe86ffc21f9/output/scan.spz",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/15d33c98-46e5-4bb0-90dc-bbe86ffc21f9/job.json",
+          "status": "mismatch"
+        },
+        {
+          "path": "var/scans/15d33c98-46e5-4bb0-90dc-bbe86ffc21f9/stills/000.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/15d33c98-46e5-4bb0-90dc-bbe86ffc21f9/stills/001.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/15d33c98-46e5-4bb0-90dc-bbe86ffc21f9/stills/002.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184320/viewer-1440.png",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184320/viewer-390.png",
+          "status": "match"
+        }
+      ]
+    },
+    {
+      "name": "Variant 14.59 s",
+      "role": "sweep",
+      "clip": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\spike\\clips\\VID_20261121_184453628.mp4",
+      "clipExists": true,
+      "evidence": [
+        {
+          "path": "var/scans/bb588361-7337-490d-9dbf-2ce9492ca3b1/output/scan.spz",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/bb588361-7337-490d-9dbf-2ce9492ca3b1/job.json",
+          "status": "mismatch"
+        },
+        {
+          "path": "var/scans/bb588361-7337-490d-9dbf-2ce9492ca3b1/stills/000.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/bb588361-7337-490d-9dbf-2ce9492ca3b1/stills/001.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/bb588361-7337-490d-9dbf-2ce9492ca3b1/stills/002.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184453/viewer-1440.png",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184453/viewer-390.png",
+          "status": "match"
+        }
+      ]
+    },
+    {
+      "name": "Variant 15.00 s",
+      "role": "sweep",
+      "clip": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\spike\\clips\\VID_20261121_184626753.mp4",
+      "clipExists": true,
+      "evidence": [
+        {
+          "path": "var/scans/e8d4c2a3-e898-422e-9d83-a9f2dd1b6cbe/output/scan.spz",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/e8d4c2a3-e898-422e-9d83-a9f2dd1b6cbe/job.json",
+          "status": "mismatch"
+        },
+        {
+          "path": "var/scans/e8d4c2a3-e898-422e-9d83-a9f2dd1b6cbe/stills/000.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/e8d4c2a3-e898-422e-9d83-a9f2dd1b6cbe/stills/001.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/e8d4c2a3-e898-422e-9d83-a9f2dd1b6cbe/stills/002.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184626/viewer-1440.png",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184626/viewer-390.png",
+          "status": "match"
+        }
+      ]
+    },
+    {
+      "name": "Variant 4K 14.62 s",
+      "role": "sweep",
+      "clip": "C:\\Users\\fauzi\\OneDrive\\Documents\\GitHub\\Lihatdulu\\var\\spike\\clips\\VID_20261121_184714115.mp4",
+      "clipExists": true,
+      "evidence": [
+        {
+          "path": "var/scans/37a5694c-e960-46d2-84cb-38eafdb4f134/output/scan.spz",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/37a5694c-e960-46d2-84cb-38eafdb4f134/job.json",
+          "status": "mismatch"
+        },
+        {
+          "path": "var/scans/37a5694c-e960-46d2-84cb-38eafdb4f134/stills/000.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/37a5694c-e960-46d2-84cb-38eafdb4f134/stills/001.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/scans/37a5694c-e960-46d2-84cb-38eafdb4f134/stills/002.jpg",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184714/viewer-1440.png",
+          "status": "match"
+        },
+        {
+          "path": "var/spike/preview-184714/viewer-390.png",
+          "status": "match"
+        }
+      ]
+    }
+  ]
+}
