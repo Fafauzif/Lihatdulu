@@ -10,50 +10,66 @@
 
 **Spec:** [scan workstream](../../handoff/workstreams/scan.md) · [toolchain record](../../handoff/scan-toolchain.md) · [previous plan](2026-11-20-real-furniture-scan.md)
 
-## Shallow pass over the dropped clips (2026-11-21)
+## Shallow pass over the dropped clips (2026-11-22)
+
+Eight camera originals, all the same chair and room:
 
 | # | File | Duration | Size | Resolution | FPS | Bitrate |
 |---|---|---|---|---|---|---|
-| 1 | `WhatsApp Video 2026-11-21 at 6.43.18 PM.mp4` | 25.35 s | 5.9 MB | 478×850 | 60 | ~1.86 Mbps |
-| 2 | `WhatsApp Video 2026-11-21 at 6.44.25 PM.mp4` | 20.13 s | 4.6 MB | 478×850 | 60 | ~1.84 Mbps |
-| 3 | `WhatsApp Video 2026-11-21 at 6.45.22 PM.mp4` | 14.59 s | 3.3 MB | 478×850 | 60 | ~1.84 Mbps |
-| 4 | `WhatsApp Video 2026-11-21 at 6.46.54 PM.mp4` | 15.00 s | 3.5 MB | 478×850 | 60 | ~1.84 Mbps |
-| 5 | `WhatsApp Video 2026-11-21 at 6.47.52 PM.mp4` | 14.62 s | 3.3 MB | 478×850 | 60 | ~1.83 Mbps |
+| 1 | `VID_20261121_184212135.mp4` | 10.03 s | 25.5 MB | 1920×1080 | 60 | ~20.4 Mbps |
+| 2 | `VID_20261121_184227976.mp4` | 25.35 s | 64.3 MB | 1920×1080 | 60 | ~20.3 Mbps |
+| 3 | `VID_20261121_184320272.mp4` | 10.21 s | 25.9 MB | 1920×1080 | 60 | ~20.3 Mbps |
+| 4 | `VID_20261121_184333634.mp4` | 3.33 s | 8.8 MB | 1920×1080 | 60 | ~21.2 Mbps |
+| 5 | `VID_20261121_184349140.mp4` | 20.13 s | 51.0 MB | 1920×1080 | 60 | ~20.3 Mbps |
+| 6 | `VID_20261121_184453628.mp4` | 14.59 s | 37.0 MB | 1920×1080 | 60 | ~20.3 Mbps |
+| 7 | `VID_20261121_184626753.mp4` | 15.00 s | 38.0 MB | 1920×1080 | 60 | ~20.3 Mbps |
+| 8 | `VID_20261121_184714115.mp4` | 14.62 s | 89.8 MB | 3840×2160 | 29.97 | ~49.1 Mbps |
 
-All five are the same **black mesh office chair** with a chrome five-star base, in a room with a yellow wardrobe, white tiled wall and a black-and-white checkerboard floor. Lighting is mixed ceiling/indoor light; the chair is dark and low-contrast, some frames crop the wheels. There are no notes and no clip roles. The first two takes are the longest and have the widest coverage; the last three are 14–15 s.
+All are H.264 with a `-90` rotation flag (portrait display 1080×1920, or 2160×3840 for the 4K take), AAC stereo audio and bt709 color; the 4K file reports `smpte170m`/`bt470bg` primaries, so watch for a color shift. The five WhatsApp copies from the previous pass are still in `var/spike/clips/`; they must be archived before any inventory run.
+
+What the takes contain (from the contact sheet, 10/50/90 % frames):
+
+- Same **black mesh office chair** with a chrome five-star base, yellow wardrobe, white tile and checkerboard floor; mixed indoor ceiling/window light, chair dark and low-contrast, wheels sometimes at the frame edge.
+- `184227` (25.35 s) is the longest, with the widest orbit. `184349` (20.13 s) is the second-longest and also covers the chair well. These are the natural golden/repeat pair unless the frames say otherwise.
+- `184333` (3.33 s) is a **false start** — exclude it. `184212` and `184320` (≈10 s) are shorter extra attempts; `184320` ends pointed at the wardrobe/floor, so its tail is not useful.
+- `184453`, `184626` (≈15 s) and `184714` (4K, 14.62 s) are the likely variant takes. The 4K take is the last recorded and also ends with a lot of room in frame.
 
 Implications this plan is built around:
 
-- The files are **WhatsApp re-encodes at 0.4 MP**, not camera originals. That is not enough resolution for the mesh/floor detail the matcher needs; they are useful for building the harness and learning failure modes, **not for the go/no-go**.
-- At 3 fps, the 14–15 s takes yield 43–45 frames and fail the 60-frame gate. The pipeline needs adaptive extraction (Task 3) before those takes can be judged.
-- A dark object in mixed light needs a side-light instruction, not more generic "good light" copy (Task 6).
+- The originals are proof-capable (1080p/20 Mbps and 4K/49 Mbps); the compressed copies are legacy input only and must not enter the batch.
+- At 3 fps the 3.3 s clip gives 9 frames, the 10 s clips 30, the 14.6–15 s clips 43–45, the 20.1 s clip 60 and the 25.3 s clip 76. Adaptive extraction (Task 3) covers everything from ~10 s up; the 3.3 s clip stays below 60 even at 8 fps and must be excluded.
+- A dark object in mixed light still needs a side-light instruction (Task 6), now based on real 1080p footage rather than compressed thumbnails.
+- All clips carry audio; the extraction step ignores it, so no code change is needed.
+- Images are expensive here: the planner/executor must keep screenshots on disk and verify the viewer programmatically. Do not read them into the conversation unless the user explicitly asks for the single per-checkpoint contact sheet.
 
 ## Global Constraints
 
-- Start from `main` at `667bdb8` (PR #1 already merged) and create `feat/scan-video-study`.
+- Work on `feat/scan-video-study` (already created from `main` at `667bdb8`, with this plan committed as `f3ef898`). Do not recreate the branch.
 - Clips live in `var/spike/clips/` (git-ignored); never commit clips, frames, runs or screenshots.
-- **Originals rule:** a clip is only proof when `min(width,height) >= 720` and bitrate is ≥ 2.5 Mbps. WhatsApp 478×850 copies are a preliminary pass; do not mark the scan workstream proven on them.
+- **Originals rule:** the eight `VID_*.mp4` files are the proof set (1080p/20 Mbps, 4K/49 Mbps). The five `WhatsApp Video*.mp4` files are legacy compressed copies; archive them before the inventory and keep them out of every batch.
+- The `VID_20261121_184333634.mp4` clip is 3.33 s; it is a false start and must not be run as a usable take.
 - Tools: `SCAN_COLMAP=var/tools/colmap/bin/colmap.exe`, `SCAN_BRUSH=var/tools/brush/brush_app.exe`; FFmpeg/ffprobe on PATH; `splat-transform` via the installed devDependency.
 - Keep the one-worker/disk-job model, 60-frame minimum, 60 MB / 2.5 M splat cap and 10-minute demo target.
 - Do not change catalogue IDs, Sora assets, buyer/seller contracts, or merge/push the branch.
 - User-facing copy stays natural Indonesian. `dist/` is restored with `git checkout -- dist` after screenshots.
 - Do not lower a threshold just to make a failed clip pass; record the failure instead.
+- **Image guardrail (all phases):** the conversation has a hard cap of 20 attached images; exceeding it kills the session. Never attach, paste or read rendered images into the conversation. Save every render, screenshot, contact sheet and still to `var/spike/` and report only the file path plus a text summary. Verify programmatically wherever possible (viewer `data-state`, splat count, PNG byte size, pixel/edge checks in a script). When a human review is genuinely needed, build ONE tiled contact sheet for that checkpoint (e.g. 3×N with captions) and attach only that single image, only when asked. Keep a running count of images attached in the session; before adding one, if the total would reach 15, stop, save everything, summarize, and tell the user to open a new session.
+  - This session already has 14 attached images; do not attach anything else here. The new session starts its own count at 0 and follows the same rule.
 
 ## Starting point
 
 ```powershell
-git switch main
-git pull --ff-only
-git switch -c feat/scan-video-study
+git switch feat/scan-video-study
 git status --short --branch
+Get-ChildItem var\spike\clips | Select-Object Name,Length
 ```
 
-Expected: `main` includes `667bdb8` (PR #1); clean tree; the clips are in `var/spike/clips/`; `var/tools/colmap/bin/colmap.exe` and `var/tools/brush/brush_app.exe` still exist.
+Expected: the branch has the plan commit; the tree is clean; the folder contains eight `VID_*.mp4` originals and the five legacy WhatsApp copies; `var/tools/colmap/bin/colmap.exe` and `var/tools/brush/brush_app.exe` still exist.
 
 ## Review Focus
 
-1. **The originals never arrive and the compressed copies are treated as proof.** The inventory must flag `478×850` as compressed and Task 4 must stop before the go/no-go. Pinned in Task 1 (`classifyClip`) and Task 4's gate.
-2. **A 14–15 s take is rejected by the frame floor even though it is otherwise usable.** Adaptive extraction must reach 60 frames at a sane fps, and Task 4 must show the frame count. Pinned in Task 3 (`extractionFps`).
+1. **The five compressed copies are still in the clip folder and get mixed into the batch.** The inventory must archive them first and flag anything below 720p/2.5 Mbps; Task 5 must not count a compressed file as proof. Pinned in Task 1 (`classifyClip`) and the archive step.
+2. **The 3.3 s false start or a 10 s take is rejected by the frame floor.** The false start is excluded by role mapping; the 10 s takes must reach 60 frames through adaptive extraction. Pinned in Task 1's duration warning and Task 3 (`extractionFps`).
 3. **One bad clip aborts the whole batch.** The batch harness must record a failed job, continue to the next clip, and write results incrementally. Pinned in Task 2 (`runBatch` failure test).
 4. **A missing/wrong tool path fails mid-run with a useless error.** Tool resolution must fail with the install hint before the first clip, and the batch must name the tool. Pinned in Task 2 (`toolDefaults`/`assertTools`).
 5. **A batch job cannot be opened as a buyer preview.** The shot script must assert the viewer reaches `data-state="ready"` and the canvas is non-blank, not just that the page loads. Pinned in Task 7.
@@ -71,10 +87,21 @@ Expected: `main` includes `667bdb8` (PR #1); clean tree; the clips are in `var/s
 **Interfaces:**
 - `classifyClip({ width, height, durationS, bitRate }) -> { quality: "original" | "compressed", warnings: string[] }`
   - `compressed` when `Math.min(width, height) < 720` or `bitRate < 2_500_000`; warning text mentions the low resolution and suggests requesting the original file.
+  - A warning is also added when `durationS < 8`: `"Durasi <n> detik; minimal 8 detik."` (the 3.33 s false start must be visible before the batch).
 - `frameTimes(durationS, count = 3) -> number[]` — 10 %, 50 % and 90 % of duration, rounded to two decimals.
 - CLI: `node scripts/scan-inventory.mjs [--dir var/spike/clips] [--out var/spike]`.
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Archive the legacy compressed copies**
+
+```powershell
+New-Item -ItemType Directory -Force var\spike\clips-compressed | Out-Null
+Move-Item "var\spike\clips\WhatsApp Video*.mp4" var\spike\clips-compressed\ -ErrorAction SilentlyContinue
+(Get-ChildItem var\spike\clips -Filter *.mp4).Count
+```
+
+Expected: `8`; `var/spike/clips/` now contains only the eight `VID_*.mp4` originals.
+
+- [ ] **Step 2: Write the failing tests**
 
 ```js
 import { classifyClip, frameTimes } from "../scripts/scan-inventory.mjs";
@@ -86,21 +113,26 @@ test("a 478x850 WhatsApp copy is compressed", () => {
 });
 test("a 1080x1920 original is accepted", () => {
   assert.deepEqual(
-    classifyClip({ width: 1080, height: 1920, durationS: 25, bitRate: 8_000_000 }),
+    classifyClip({ width: 1080, height: 1920, durationS: 25, bitRate: 20_000_000 }),
     { quality: "original", warnings: [] },
   );
+});
+test("the 3.3 s false start is flagged but stays original quality", () => {
+  const result = classifyClip({ width: 1080, height: 1920, durationS: 3.33, bitRate: 20_000_000 });
+  assert.equal(result.quality, "original");
+  assert.match(result.warnings.join(" "), /minimal 8|terlalu singkat/i);
 });
 test("frameTimes samples start, middle and end", () => {
   assert.deepEqual(frameTimes(20), [2, 10, 18]);
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] **Step 3: Run tests to verify they fail**
 
 Run: `node tests/scan-inventory.test.js`
 Expected: FAIL with `Cannot find module ... scan-inventory.mjs`.
 
-- [ ] **Step 3: Implement the inventory**
+- [ ] **Step 4: Implement the inventory**
 
 Use `node:child_process` `execFile` for `ffprobe`/`ffmpeg`, `node:fs/promises` for files, `node:path` for names. For each `*.mp4|*.mov|*.m4v`:
 
@@ -108,42 +140,40 @@ Use `node:child_process` `execFile` for `ffprobe`/`ffmpeg`, `node:fs/promises` f
 2. Record `{ file, sizeBytes, width, height, durationS, fps, codec, bitRate, quality, warnings, frames }`.
 3. Extract the three `frameTimes` to `var/spike/frames/<slug>/frame-<n>.jpg` with `ffmpeg -y -v error -ss <t> -i <file> -frames:v 1 -q:v 2 <out>`.
 4. Build the sheet: copy the frames to numbered `f%02d.jpg` in a temp folder, then `ffmpeg -y -v error -framerate 1 -i f%02d.jpg -vf "scale=300:-1,tile=3xN:padding=4:margin=4" -frames:v 1 var/spike/contact-sheet.jpg` (the Windows FFmpeg build has no glob support).
-5. Write the JSON and print one table row per clip.
+5. Write the JSON and print one table row per clip, including each clip's `warnings` (the 3.33 s false start must show its duration warning).
 
-Then, if originals are present, move the WhatsApp set out of the way first:
+The archive step already left only the eight originals in `var/spike/clips`; the inventory should not see a WhatsApp file.
 
-```powershell
-New-Item -ItemType Directory -Force var\spike\clips-compressed | Out-Null
-Move-Item "var\spike\clips\WhatsApp Video*.mp4" var\spike\clips-compressed\ -ErrorAction SilentlyContinue
-```
+- [ ] **Step 5: Run tests and the inventory**
 
-If only compressed files exist, keep them in place and pass `--out var/spike/preliminary`.
-
-- [ ] **Step 4: Run tests and the inventory**
-
-Run: `node tests/scan-inventory.test.js` → PASS, 3 tests.
+Run: `node tests/scan-inventory.test.js` → PASS, 4 tests.
 Run: `node scripts/scan-inventory.mjs`
-Expected: a JSON entry per clip; every current WhatsApp file reports `compressed`. Open `var/spike/contact-sheet.jpg`.
+Expected: eight JSON entries, all `quality: "original"`; the 3.33 s file carries the duration warning; the 4K file reports 3840×2160. Write the sheet to `var/spike/contact-sheet.jpg` and **do not read it into the conversation** — use it locally to map roles.
 
-- [ ] **Step 5: Assign roles by content**
+- [ ] **Step 6: Assign roles by content**
 
-Open the contact sheet and write `var/spike/clip-roles.json`:
+Open the local contact sheet **on disk** and write `var/spike/clip-roles.json`. Start from these candidates (duration and recording order), then correct them from the sheet:
 
 ```json
 {
-  "preliminary": true,
-  "golden": "<file with the best full orbit>",
-  "repeat": "<file with the same recipe, second take>",
-  "fast": "<file if identifiable>",
-  "dim": "<file if identifiable>",
-  "far": "<file if identifiable>",
-  "notes": "Mapped visually; filenames carry no roles."
+  "preliminary": false,
+  "excluded": ["VID_20261121_184333634.mp4"],
+  "golden": "VID_20261121_184227976.mp4",
+  "repeat": "VID_20261121_184349140.mp4",
+  "variants": [
+    "VID_20261121_184212135.mp4",
+    "VID_20261121_184320272.mp4",
+    "VID_20261121_184453628.mp4",
+    "VID_20261121_184626753.mp4",
+    "VID_20261121_184714115.mp4"
+  ],
+  "notes": "Candidates from duration and order; confirm on the local sheet. The 4K file is the last take."
 }
 ```
 
-Do not trust filenames; map by the frames. If the originals replace the WhatsApp set, set `"preliminary": false`.
+The 3.33 s file is excluded. Do not attach the contact sheet to the conversation; if a human review is genuinely needed, it is the single per-checkpoint image and the user must ask for it.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add scripts/scan-inventory.mjs tests/scan-inventory.test.js
@@ -268,11 +298,12 @@ git commit -m "feat(scan): batch chair clips through the real worker"
 
 ```js
 test("short takes extract at a higher fps to reach the frame floor", () => {
-  assert.equal(extractionFps(25.3), 3);
-  assert.equal(extractionFps(20.1), 3);
-  assert.equal(extractionFps(14.6), 5);
-  assert.equal(extractionFps(8), 8);
-  assert.equal(extractionFps(7), 8);
+  assert.equal(extractionFps(25.35), 3);
+  assert.equal(extractionFps(20.13), 3);
+  assert.equal(extractionFps(15.0), 4);
+  assert.equal(extractionFps(14.585), 5);
+  assert.equal(extractionFps(10.03), 6);
+  assert.equal(extractionFps(3.33), 8);
 });
 test("buildExtractArgs uses the requested fps", () => {
   assert.equal(frameFilter(5), "fps=5,scale=1280:-2");
@@ -290,7 +321,7 @@ Expected: FAIL — `extractionFps`/`frameFilter` are not exported.
 
 - [ ] **Step 3: Implement**
 
-Add the constants and function; replace the fixed filter in `buildExtractArgs`; compute fps in the pipeline. Keep the 60-frame check unchanged: with 7 s at 8 fps you get 56 frames and still fail `footage_short`, which is the honest result.
+Add the constants and function; replace the fixed filter in `buildExtractArgs`; compute fps in the pipeline. Keep the 60-frame check unchanged: 15 s at 4 fps gives 60 frames, 10.03 s at 6 fps gives 60, and the 3.33 s false start reaches only 26 at the 8 fps cap — excluded by Task 1, not rescued here.
 
 - [ ] **Step 4: Run the suite**
 
@@ -310,20 +341,22 @@ git commit -m "feat(scan): adapt extraction fps for short clips"
 
 No new code. Use the roles from Task 1.
 
-- [ ] **Step 1: Confirm originals**
+- [ ] **Step 1: Confirm originals and roles**
 
 Run: `node scripts/scan-inventory.mjs`
-Expected: at least the golden and repeat clips report `quality: "original"`. If all are still `478×850`, continue as a **preliminary** run and stop before Task 8's go/no-go.
+Expected: eight entries, all `quality: "original"`; the 3.33 s clip carries the duration warning and is in `clip-roles.json` under `excluded`. If the golden or repeat file is missing or compressed, stop and fix the archive/roles first.
 
 - [ ] **Step 2: Set tools and run the pair**
+
+Use the two files named in `var/spike/clip-roles.json` (`golden` and `repeat`; candidates are the 25.35 s and 20.13 s takes).
 
 ```powershell
 $env:SCAN_COLMAP="$PWD\var\tools\colmap\bin\colmap.exe"
 $env:SCAN_BRUSH="$PWD\var\tools\brush\brush_app.exe"
-node scripts/scan-batch.mjs --only <golden-token>,<repeat-token> --out var/spike/results-golden.json
+node scripts/scan-batch.mjs --only <golden-file>,<repeat-file> --out var/spike/results-golden.json
 ```
 
-Expected: two rows; both jobs reach `ready`.
+Expected: two rows; both jobs reach `ready` with the originals' 1080p source.
 
 - [ ] **Step 3: Apply the acceptance gate**
 
@@ -347,11 +380,13 @@ No new code.
 
 - [ ] **Step 1: Run the remaining clips**
 
+Use the five files in `clip-roles.json` under `variants` (two ~10 s takes, two ~15 s takes and the 4K take):
+
 ```powershell
-node scripts/scan-batch.mjs --only <fast-token>,<dim-token>,<far-token> --out var/spike/results-variants.json
+node scripts/scan-batch.mjs --only <variant-1>,<variant-2>,<variant-3>,<variant-4>,<variant-5> --out var/spike/results-variants.json
 ```
 
-Expected: each clip has a result row, including honest failures.
+Expected: each clip has a result row, including honest failures. The 3.33 s false start is not run.
 
 - [ ] **Step 2: Write the comparison table**
 
@@ -361,6 +396,8 @@ Create `var/spike/comparison.md` with one row per clip:
 | clip | resolution | duration | extracted | registered | ratio | extract | align | train | convert | total | splats | MB | outcome |
 ```
 
+Add the 4K take explicitly so its 1280-downscaled result can be compared with the 1080p takes.
+
 - [ ] **Step 3: Name the top two failure causes**
 
 Under the table write exactly two bullets. Examples: "dim take: 32 % registered — mesh detail lost"; "fast take: 41 % — motion blur". These drive Task 6 copy and Task 8's verdict.
@@ -369,7 +406,7 @@ Under the table write exactly two bullets. Examples: "dim take: 32 % registered 
 
 - Golden and repeat pass, variants fail in explainable ways → proceed.
 - Golden fails but variants reveal a fixable cause → write the fix, do not proceed to Task 8 go/no-go yet.
-- Golden fails and no variant passes → stop; ask for a reshoot or originals.
+- Golden fails and no variant passes → stop; ask for a reshoot with side light and a slower orbit.
 
 ---
 
@@ -432,16 +469,16 @@ git commit -m "feat(scan): add dark-object capture guidance"
 
 **Files:**
 - Create: `scripts/scan-preview-shot.mjs`
-- Output (ignored): `var/spike/preview-<slug>/`, `report.json`, `var/spike/visual-verdicts.md`
+- Output (ignored): `var/spike/preview-<slug>/`, `report.json`, `var/spike/visual-verdicts.md`, optional `var/spike/preview-contact-sheet.jpg`
 
 **Interfaces:**
 - CLI: `node scripts/scan-preview-shot.mjs --job <uuid> [--root var/scans] [--out var/spike/preview-<slug>]`.
-- Starts `createScanServer({ root, pipeline: async () => new Promise(() => {}), distDir: "dist" })` (serving only; no new job), opens `/pindai/<job>`, waits for `[data-scan-viewer][data-state="ready"]`, asserts the viewer screenshot is > 15 000 bytes, saves 1440 and 390 PNGs, writes `report.json` with `{ job, state, splats, viewerBytes, screenshots }`.
-- Exits 1 if the viewer never reaches ready.
+- Starts `createScanServer({ root, pipeline: async () => new Promise(() => {}), distDir: "dist" })` (serving only; no new job), opens `/pindai/<job>`, waits for `[data-scan-viewer][data-state="ready"]`, reads `data-splats`, asserts the viewer screenshot is > 15 000 bytes, saves 1440 and 390 PNGs, writes `report.json` with `{ job, state, splats, viewerBytes, screenshots }`.
+- Exits 1 if the viewer never reaches ready or the splat count is 0.
 
 - [ ] **Step 1: Implement the QA script**
 
-Reuse `testBrowserPath` from `scripts/test-browser.js`. Use Chromium flags `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`. No unit test; it is verified by running it.
+Reuse `testBrowserPath` from `scripts/test-browser.js`. Use Chromium flags `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`. No unit test; it is verified by running it. **Never open the PNGs in the conversation.**
 
 - [ ] **Step 2: Run it on every job in the two result files**
 
@@ -451,11 +488,13 @@ Run: `npm run build`, then for each `jobId` in `var/spike/results-golden.json` a
 node scripts/scan-preview-shot.mjs --job <jobId> --out var/spike/preview-<slug>
 ```
 
-Expected: `state=ready`, canvas screenshot > 15 000 bytes, two PNGs per job. A job that failed reconstruction has no result; record it as `no preview (failed)`.
+Expected: `state=ready`, `splats > 0`, canvas screenshot > 15 000 bytes, two PNGs per job. A job that failed reconstruction has no result; record it as `no preview (failed)`. Do not attach the screenshots.
 
-- [ ] **Step 3: Write the visual verdicts**
+- [ ] **Step 3: Write programmatic visual verdicts**
 
-Create `var/spike/visual-verdicts.md` with one line per job: clip, viewer state, splats, canvas bytes, and one of `recognizable chair`, `fragment only`, `room dominates`, `floating/cropped`. These lines fill Task 8's `visual` column.
+Create `var/spike/visual-verdicts.md` with one line per job: clip, viewer state, splats, canvas bytes, and one of `recognizable chair`, `fragment only`, `room dominates`, `floating/cropped`. Derive the label from the screenshot's programmatic signal and the earlier reconstruction numbers, not from reading the image into chat. These lines fill Task 8's `visual` column.
+
+If a human review is genuinely required, build **one** tiled contact sheet at `var/spike/preview-contact-sheet.jpg` and leave it on disk; attach it only if the user explicitly asks for that single checkpoint image. Check the session's image count before doing so.
 
 - [ ] **Step 4: Commit**
 
@@ -476,7 +515,7 @@ git commit -m "test(scan): add preview screenshot harness"
 
 - [ ] **Step 1: Fill the real-clip table**
 
-Under "Known-dataset smoke", add a **Real chair clips** section with one row per clip: original filename, resolution, duration, extracted, registered, ratio, extract/align/train/convert/total ms, splat count, artifact MB, outcome, visual one-liner. State explicitly whether the clips were originals or WhatsApp copies.
+Under "Known-dataset smoke", add a **Real chair clips** section with one row per run clip: original filename, resolution, duration, extracted, registered, ratio, extract/align/train/convert/total ms, splat count, artifact MB, outcome, and the visual verdict from `var/spike/visual-verdicts.md`. State explicitly that these are camera originals (and that the 4K take is 3840×2160).
 
 - [ ] **Step 2: Write the verdict**
 
@@ -484,11 +523,11 @@ One of:
 
 - **Go:** golden and repeat pass the Task 4 gate; write the recipe (lighting, speed, heights, duration, fps) that should be used for the competition scan.
 - **Reshoot:** name the single change (side light, slower orbit, longer clip, higher resolution) and why.
-- **Blocked:** originals absent; state what is needed.
+- **Blocked:** tooling or data missing; state exactly what is needed.
 
 - [ ] **Step 3: Update the handoff**
 
-Session-log entry with branch, commits, commands, results, evidence paths and next step. Update the scan workstream's status: mark only what is actually proven (real chair registration, viewer load, timings). Do not mark the physical-phone acceptance as done.
+Session-log entry with branch, commits, commands, results, evidence paths and next step. Update the scan workstream's status: mark only what is actually proven (real chair registration, viewer load, timings). Do not mark the physical-phone acceptance as done. Reference screenshot paths as text; do not attach images.
 
 - [ ] **Step 4: Final verification and commit**
 
@@ -504,4 +543,4 @@ git add docs/handoff/scan-toolchain.md docs/handoff/session-log.md docs/handoff/
 git commit -m "docs(scan): record real chair reconstruction evidence"
 ```
 
-If the clips were still compressed, the commit must say "preliminary", and the plan ends before the go/no-go.
+If any run accidentally used a compressed copy, the commit must say "preliminary", and the plan ends before the go/no-go.
