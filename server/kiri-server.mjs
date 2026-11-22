@@ -325,6 +325,7 @@ export function createClient(config) {
       baseUrl: config.baseUrl,
       requestTimeoutMs: config.requestTimeoutMs,
       uploadTimeoutMs: config.uploadTimeoutMs,
+      isMask: config.isMask,
       downloadTimeoutMs: config.downloadTimeoutMs,
     });
   return unconfiguredClient();

@@ -88,6 +88,15 @@ test("the upload has its own, much longer timeout than control calls", () => {
   assert.equal(custom.uploadTimeoutMs, 900000);
 });
 
+test("object masking is on by default and switchable from the environment", () => {
+  const defaults = readKiriConfig({ KIRI_API_KEY: "k" }, "C:/work");
+  assert.equal(defaults.isMask, 1);
+  const off = readKiriConfig({ KIRI_API_KEY: "k", KIRI_ISMASK: "0" }, "C:/work");
+  assert.equal(off.isMask, 0);
+  const noise = readKiriConfig({ KIRI_API_KEY: "k", KIRI_ISMASK: "nope" }, "C:/work");
+  assert.equal(noise.isMask, 1);
+});
+
 test("publicConfig exposes the mode but never the key or local paths", () => {
   const config = readKiriConfig(
     { KIRI_API_KEY: "super-secret", KIRI_JOBS_ROOT: "C:/private/jobs" },

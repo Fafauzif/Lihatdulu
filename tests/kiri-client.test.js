@@ -43,6 +43,53 @@ test("submitVideo sends the 3DGS form with automatic masking", async (t) => {
   assert.equal(typeof upload.arrayBuffer, "function");
 });
 
+test("submitImages sends every still to the 3DGS photo endpoint", async (t) => {
+  const first = await tempVideo(t);
+  const second = await tempVideo(t);
+  let seen;
+  const client = createKiriClient({
+    apiKey: "kiri-secret",
+    fetchImpl: async (url, options) => {
+      seen = { url, options };
+      return jsonResponse({ code: 0, msg: "success", data: { serialize: "photo12345678", calculateType: 3 }, ok: true });
+    },
+  });
+  const result = await client.submitImages({
+    files: [
+      { path: first, filename: "0001.jpg" },
+      { path: second, filename: "0002.jpg" },
+    ],
+    mask: 0,
+  });
+  assert.equal(result.serial, "photo12345678");
+  assert.equal(result.calculateType, 3);
+  assert.match(seen.url, /\/v1\/open\/3dgs\/image$/);
+  assert.equal(seen.options.method, "POST");
+  assert.equal(seen.options.headers.authorization, "Bearer kiri-secret");
+  assert.equal(seen.options.body.get("isMesh"), "0");
+  assert.equal(seen.options.body.get("isMask"), "0");
+  const uploads = seen.options.body.getAll("imagesFiles");
+  assert.equal(uploads.length, 2);
+  assert.deepEqual(
+    uploads.map((file) => file.name),
+    ["0001.jpg", "0002.jpg"],
+  );
+});
+
+test("submitImages refuses an empty photo set without calling KIRI", async () => {
+  const client = createKiriClient({
+    apiKey: "k",
+    fetchImpl: async () => {
+      throw new Error("must not fetch");
+    },
+  });
+  await assert.rejects(client.submitImages({ files: [] }), (error) => {
+    assert.equal(error.code, "kiri_unavailable");
+    assert.equal(error.detail, "Foto kosong.");
+    return true;
+  });
+});
+
 test("getStatus maps every documented KIRI status", async () => {
   const states = [];
   for (const status of [-1, 0, 1, 2, 3, 4]) {
@@ -134,6 +181,21 @@ test("a non-zero API code becomes an upstream error", async () => {
     assert.equal(error.code, "kiri_unavailable");
     return true;
   });
+});
+
+test("masking can be switched off per client and per call", async (t) => {
+  const file = await tempVideo(t);
+  const seen = [];
+  const fetchImpl = async (_url, options) => {
+    seen.push(options.body.get("isMask"));
+    return jsonResponse({ code: 200, msg: "success", data: { serialize: "abc123def456" } });
+  };
+  const off = createKiriClient({ apiKey: "kiri-secret", fetchImpl, isMask: 0 });
+  await off.submitVideo({ filePath: file });
+  const on = createKiriClient({ apiKey: "kiri-secret", fetchImpl });
+  await on.submitVideo({ filePath: file });
+  await on.submitVideo({ filePath: file, mask: 0 });
+  assert.deepEqual(seen, ["0", "1", "0"]);
 });
 
 test("submitVideo uses the long upload timeout, not the control timeout", async (t) => {

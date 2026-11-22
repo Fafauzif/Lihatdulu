@@ -25,6 +25,7 @@ export const DEFAULTS = Object.freeze({
   // A phone clip is tens of megabytes and the seller's upstream can be slow, so
   // the upload gets its own budget instead of the short control-call timeout.
   uploadTimeoutMs: 15 * 60 * 1000,
+  isMask: 1,
   requestTimeoutMs: 2 * 60 * 1000,
   downloadTimeoutMs: 20 * 60 * 1000,
   port: 8787,
@@ -117,6 +118,7 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
       env.KIRI_UPLOAD_TIMEOUT_MS,
       DEFAULTS.uploadTimeoutMs,
     ),
+    isMask: env.KIRI_ISMASK === "0" ? 0 : 1,
     requestTimeoutMs: positive(
       env.KIRI_REQUEST_TIMEOUT_MS,
       DEFAULTS.requestTimeoutMs,

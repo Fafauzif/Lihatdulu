@@ -52,6 +52,10 @@ export function createKiriClient({
   requestTimeoutMs = 120_000,
   uploadTimeoutMs = 15 * 60 * 1000,
   downloadTimeoutMs = 20 * 60 * 1000,
+  // Automatic object masking is the default because most sellers film a single
+  // item in a room. It is switchable because masking a dark object can cut the
+  // subject itself apart, which is one of the things the quality matrix tests.
+  isMask = 1,
 } = {}) {
   if (!apiKey) throw new KiriError("missing_key");
 
@@ -121,10 +125,10 @@ export function createKiriClient({
 
   const client = {
     provider: "kiri",
-    async submitVideo({ filePath, filename = "video.mp4" } = {}) {
+    async submitVideo({ filePath, filename = "video.mp4", mask = isMask } = {}) {
       const form = new FormData();
       form.append("isMesh", "0");
-      form.append("isMask", "1");
+      form.append("isMask", String(Number(mask) ? 1 : 0));
       form.append("videoFile", await videoBlob(filePath), filename);
       const payload = await request("/v1/open/3dgs/video", {
         method: "POST",
@@ -133,10 +137,54 @@ export function createKiriClient({
         // timeout here or a normal phone clip is aborted mid-upload.
         timeoutMs: uploadTimeoutMs,
       });
+      if (process.env.KIRI_DEBUG === "1")
+        console.error(
+          "submit-response",
+          JSON.stringify(Object.keys(payload ?? {})),
+          JSON.stringify(payload?.data && typeof payload.data === "object" ? Object.keys(payload.data) : typeof payload?.data),
+        );
       const serial = payload?.data?.serialize;
       if (typeof serial !== "string" || !SERIAL.test(serial))
         throw new KiriError("kiri_unavailable", {
           detail: "Respons unggah tanpa serial.",
+        });
+      return {
+        serial,
+        calculateType: Number(payload?.data?.calculateType ?? 0) || null,
+      };
+    },
+
+    // Photo-set route: frames pulled from one clip can be re-sent as stills,
+    // which reconstructs single objects far better than a video orbit does.
+    // Docs: POST /v1/open/3dgs/image, multipart `imagesFiles` (20–300 files).
+    async submitImages({ files = [], mask = isMask } = {}) {
+      if (!Array.isArray(files) || files.length === 0)
+        throw new KiriError("kiri_unavailable", { detail: "Foto kosong." });
+      const form = new FormData();
+      form.append("isMesh", "0");
+      form.append("isMask", String(Number(mask) ? 1 : 0));
+      for (const file of files) {
+        form.append(
+          "imagesFiles",
+          await videoBlob(file.path),
+          file.filename ?? "frame.jpg",
+        );
+      }
+      const payload = await request("/v1/open/3dgs/image", {
+        method: "POST",
+        body: form,
+        timeoutMs: uploadTimeoutMs,
+      });
+      if (process.env.KIRI_DEBUG === "1")
+        console.error(
+          "submit-images-response",
+          JSON.stringify(Object.keys(payload ?? {})),
+          JSON.stringify(payload?.data && typeof payload.data === "object" ? Object.keys(payload.data) : typeof payload?.data),
+        );
+      const serial = payload?.data?.serialize;
+      if (typeof serial !== "string" || !SERIAL.test(serial))
+        throw new KiriError("kiri_unavailable", {
+          detail: "Respons unggah foto tanpa serial.",
         });
       return {
         serial,
