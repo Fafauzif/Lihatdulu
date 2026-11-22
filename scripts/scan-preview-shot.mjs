@@ -14,11 +14,12 @@ import { isJobId, readJob } from "../server/scan-jobs.mjs";
 // Starts a serving-only scan server (pipeline paused, no new job is created),
 // opens /pindai/<job> in headless Chromium with SwiftShader, waits for
 // [data-scan-viewer][data-state="ready"], checks data-splats, screenshots the
-// viewer element (must exceed 15000 bytes) and saves 1440x900 + 390x844
-// viewport PNGs plus report.json with { job, state, splats, viewerBytes,
-// screenshots }. Run it from the repository root so dist/ and var/scans
-// resolve. Exits 1 for a missing/not-ready job, a viewer that never reaches
-// ready, data-splats = 0, or a viewer screenshot <= 15000 bytes.
+// viewer element (must exceed 15000 bytes) and saves the viewer canvas plus
+// 1440x900 + 390x844 viewport PNGs and report.json with { job, state, splats,
+// viewerBytes, screenshots, viewerScreenshots }. Run it from the repository
+// root so dist/ and var/scans resolve. Exits 1 for a missing/not-ready job, a
+// viewer that never reaches ready, data-splats = 0, or a viewer screenshot
+// <= 15000 bytes.
 //
 // The PNGs are evidence on disk only: never open or attach them in chat.
 
@@ -225,14 +226,21 @@ async function main() {
     }
 
     // The viewer element screenshot is the byte assertion; the canvas lives
-    // inside it and is composited by Chromium.
-    const viewerBytes = (await page.locator(VIEWER_SELECTOR).screenshot()).length;
+    // inside it and is composited by Chromium. Keep the PNG as evidence for
+    // the programmatic visual verdict (never opened in chat).
+    const viewerShot = await page.locator(VIEWER_SELECTOR).screenshot();
+    const viewerBytes = viewerShot.length;
+    const wideViewer = path.join(outDir, "viewer-1440.png");
+    await fs.writeFile(wideViewer, viewerShot);
     const wideShot = path.join(outDir, "1440.png");
     await page.screenshot({ path: wideShot, fullPage: false });
 
     await page.setViewportSize(NARROW_VIEWPORT);
     await page.waitForSelector(READY_SELECTOR, { timeout: READY_TIMEOUT_MS });
     await page.waitForTimeout(800);
+    const narrowViewerShot = await page.locator(VIEWER_SELECTOR).screenshot();
+    const narrowViewer = path.join(outDir, "viewer-390.png");
+    await fs.writeFile(narrowViewer, narrowViewerShot);
     const narrowShot = path.join(outDir, "390.png");
     await page.screenshot({ path: narrowShot, fullPage: false });
 
@@ -246,6 +254,7 @@ async function main() {
       splats,
       viewerBytes,
       screenshots: { 1440: wideShot, 390: narrowShot },
+      viewerScreenshots: { 1440: wideViewer, 390: narrowViewer },
     };
     const reportPath = path.join(outDir, "report.json");
     await fs.writeFile(
