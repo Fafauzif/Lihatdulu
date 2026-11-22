@@ -186,3 +186,22 @@ test("result details label mock results honestly and hide long serials", () => {
   assert.equal(serial, "abcdef123456…");
   assert.equal(rows.find(([term]) => term === "Sumber")[1].startsWith("Mode simulasi"), true);
 });
+
+test("result details say when the model came from stills", () => {
+  const photo = detailRows({
+    mock: false,
+    stage: "ready",
+    source: { filename: "kursi.mp4", bytes: 1024 },
+    input: { mode: "photo", photos: 101 },
+    kiri: { serial: "abcdef1234567890" },
+  });
+  assert.equal(photo.find(([term]) => term === "Sumber")[1], "KIRI Engine · 3DGS foto, 101 still dari video");
+  const fallback = detailRows({
+    mock: false,
+    source: { filename: "kursi.mp4", bytes: 1024 },
+    input: { mode: "video", fallback: "kiri_unavailable", reason: "ffmpeg tidak ada di PATH" },
+  });
+  assert.match(fallback.find(([term]) => term === "Sumber")[1], /mundur dari mode foto$/);
+  const video = detailRows({ mock: false, input: { mode: "video" } });
+  assert.equal(video.find(([term]) => term === "Sumber")[1], "KIRI Engine · 3DGS video, masking otomatis");
+});

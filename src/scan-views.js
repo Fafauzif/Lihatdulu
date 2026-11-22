@@ -154,13 +154,17 @@ export function renderScanPreview() {
 // Buyer-facing facts. The serial is truncated: it identifies the KIRI task but
 // is not a credential, and there is no reason to publish the whole value.
 export function detailRows(dto) {
+  // Say how the model was actually built: a photoset sampled from the clip is
+  // a different promise from sending the clip itself.
+  const source = dto.mock
+    ? "Mode simulasi · dibuat lokal, bukan dari KIRI"
+    : dto.input?.mode === "photo"
+      ? `KIRI Engine · 3DGS foto, ${dto.input.photos} still dari video`
+      : dto.input?.fallback
+        ? "KIRI Engine · 3DGS video, masking otomatis · mundur dari mode foto"
+        : "KIRI Engine · 3DGS video, masking otomatis";
   const rows = [
-    [
-      "Sumber",
-      dto.mock
-        ? "Mode simulasi · dibuat lokal, bukan dari KIRI"
-        : "KIRI Engine · 3DGS video, masking otomatis",
-    ],
+    ["Sumber", source],
     [
       "Berkas video",
       [dto.source?.filename, formatBytes(dto.source?.bytes)].filter(Boolean).join(" · "),
