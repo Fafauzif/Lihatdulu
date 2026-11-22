@@ -7,11 +7,16 @@ mesh chair are still not usable, but KIRI's **featureless-object mesh profile**
 artifact: GLB in, GLB served, textured mesh in the viewer. Details and the repeat
 command are at the end of this page.
 
-![Chair mesh from KIRI's featureless pipeline, four angles](assets/kiri-mesh-chair.jpg)
+![Chair mesh from KIRI's featureless pipeline, four angles](assets/kiri-mesh-chair.png)
 
 *The working result: 101 stills from the golden clip, `/v1/open/featureless/image`,
 GLB. Quarter, side, back and top views, taken through the real viewer. Back and
 top show texture bleed — honest, and still a chair a buyer would recognise.*
+
+![The same result on the /pindai/:id page](assets/kiri-mesh-viewer.png)
+
+*PNG of the result page itself at 1440×900 — `815.094 segitiga · mesh · 85 MB`,
+the provenance rows, and the three-quarter default pose the GLB branch sets.*
 
 The old local FFmpeg → COLMAP → Brush → CUDA scanner has been removed from the
 active tree. It remains documented for provenance in
@@ -247,7 +252,7 @@ returned 36 min later as a 30.6 MB ZIP holding `3DModel.glb` (89 582 948 B,
 
 Rendered through the real viewer at matched poses it is a chair: backrest with
 mesh texture, both arms, seat, gas lift and a five-star base with casters
-(`docs/handoff/assets/kiri-mesh-chair.jpg`). It is a room-scale shell — 3.18 ×
+(`docs/handoff/assets/kiri-mesh-chair.png`). It is a room-scale shell — 3.18 ×
 5.65 × 5.52 m — so the viewer frames the whole box and the walls appear at the
 front and back; the model is an open shell, so the viewer must force
 `THREE.DoubleSide` or the front faces vanish. Those two facts are the reason the

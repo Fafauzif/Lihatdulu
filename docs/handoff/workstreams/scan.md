@@ -62,7 +62,7 @@ of eight credits):
 - **`KIRI_INPUT=mesh` produces a usable chair** from 101 stills of the golden
   clip: 815 094 triangles, one texture, 36 min, serial
   `b3217f601ab1485591c33bbea6951f3c`. Contact sheet:
-  `docs/handoff/assets/kiri-mesh-chair.jpg`.
+  `docs/handoff/assets/kiri-mesh-chair.png`.
 - The same clip through the 3DGS video and photo routes does not: room soup at
   9.5–11 m, or a melted blob.
 
