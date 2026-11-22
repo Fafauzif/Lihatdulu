@@ -5,7 +5,7 @@ import { classifyClip, frameTimes } from "../scripts/scan-inventory.mjs";
 test("a 478x850 WhatsApp copy is compressed", () => {
   const result = classifyClip({ width: 478, height: 850, durationS: 25.35, bitRate: 1_860_550 });
   assert.equal(result.quality, "compressed");
-  assert.match(result.warnings.join(" "), /478×850|Original/i);
+  assert.match(result.warnings.join(" "), /478×850/);
 });
 
 test("a 1080x1920 original is accepted", () => {
