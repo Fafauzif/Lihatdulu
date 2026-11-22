@@ -5,6 +5,7 @@ import { runTool as defaultRunTool } from "./scan-tools.mjs";
 import { ScanError } from "./scan-errors.mjs";
 import {
   CHAIR_PROFILE,
+  CleanupError,
   parseImagesBin,
   planSubjectCleanup,
   rayTarget,
@@ -21,6 +22,12 @@ export const MIN_REGISTERED_RATIO = 0.3;
 export const MIN_FREE_BYTES = 5 * 1024 ** 3;
 export const MAX_ARTIFACT_BYTES = 60 * 1024 ** 2;
 export const MAX_SPLATS = 2_500_000;
+// Brush steps for the default export. A profile may raise it; the chair study
+// validated its radius on a 6000-step cloud.
+export const DEFAULT_BRUSH_STEPS = 3000;
+// Above this the whole-PLY filter is skipped: the pipeline would need roughly
+// three times this in memory, which is unsafe on the 8 GB demo laptop.
+export const MAX_CLEANUP_BYTES = 384 * 1024 ** 2;
 
 export const DEFAULT_LIMITS = Object.freeze({
   minFrames: MIN_FRAMES,
@@ -142,7 +149,7 @@ export const buildAnalyzeArgs = ({ model }) => [
 export const BRUSH_ARGS_TEMPLATE = Object.freeze([
   "{dataset}",
   "--total-steps",
-  "3000",
+  "{steps}",
   "--max-splats",
   "2000000",
   "--export-path",
@@ -150,14 +157,22 @@ export const BRUSH_ARGS_TEMPLATE = Object.freeze([
   "--export-name",
   "{exportName}",
   "--export-every",
-  "3000",
+  "{steps}",
 ]);
 
-export const buildBrushArgs = ({ datasetDir, outputPly }) =>
+// The default export is a 3000-step preview; an opt-in profile may ask for a
+// longer run (the chair study validated its radius on 6000 steps). Export
+// cadence always follows the step budget so the run writes one final file.
+export const buildBrushArgs = ({
+  datasetDir,
+  outputPly,
+  steps = DEFAULT_BRUSH_STEPS,
+}) =>
   BRUSH_ARGS_TEMPLATE.map((arg) => {
     if (arg === "{dataset}") return datasetDir;
     if (arg === "{exportPath}") return dirname(outputPly);
     if (arg === "{exportName}") return basename(outputPly);
+    if (arg === "{steps}") return String(steps);
     return arg;
   });
 
@@ -352,6 +367,8 @@ export async function runRealPipeline(
   // Opt-in cleanup profile; SCAN_PROFILE=chair selects the subject sphere.
   // Anything else keeps the recorded default pipeline byte for byte.
   const activeProfile = resolveProfile(profile ?? process.env.SCAN_PROFILE);
+  // The profile object carries the knobs (step budget), the name alone does not.
+  const profileConfig = activeProfile === CHAIR_PROFILE.name ? CHAIR_PROFILE : null;
   const tool = (name, args, options = {}) =>
     runTool(name, args, { ...options, signal });
   const paths = jobPaths(root, record.id);
@@ -512,7 +529,16 @@ export async function runRealPipeline(
   const outputPly = join(paths.work, "scan.ply");
   const brush = await tool(
     "brush",
-    buildBrushArgs({ datasetDir: dataset, outputPly }),
+    buildBrushArgs({
+      datasetDir: dataset,
+      outputPly,
+      // A profile that cannot place its sphere gains nothing from a longer
+      // training run: fall back to the default budget instead of paying for it.
+      steps:
+        subjectCentre || !profileConfig
+          ? (profileConfig?.trainSteps ?? DEFAULT_BRUSH_STEPS)
+          : DEFAULT_BRUSH_STEPS,
+    }),
     {
       cwd: dataset,
       timeoutMs: TIMEOUTS.brush,
@@ -537,11 +563,23 @@ export async function runRealPipeline(
     } else {
       const cleanupStarted = Date.now();
       try {
-        const cleaned = planSubjectCleanup(await readFile(ply), subjectCentre);
+            // The filter needs the whole cloud in memory (about 3x the file), so
+          // refuse to try on an export large enough to threaten the demo laptop.
+          const plyBytes = (await stat(ply)).size;
+          if (plyBytes > MAX_CLEANUP_BYTES)
+            throw new CleanupError(
+              `berkas ${(plyBytes / 1024 ** 2).toFixed(0)} MB terlalu besar untuk penyaringan di memori.`,
+            );
+          const cleaned = planSubjectCleanup(await readFile(ply), subjectCentre);
         const cleanedPly = join(paths.work, "scan-subject.ply");
         await writeFile(cleanedPly, cleaned.buffer);
         convertPly = cleanedPly;
-        profileRecord = { name: activeProfile, applied: true, ...cleaned.stats };
+        profileRecord = {
+          name: activeProfile,
+          applied: true,
+          trainSteps: profileConfig?.trainSteps ?? DEFAULT_BRUSH_STEPS,
+          ...cleaned.stats,
+        };
       } catch (error) {
         profileRecord = {
           name: activeProfile,

@@ -841,11 +841,16 @@ async function main() {
     fail(`ID pekerjaan tidak valid: ${job}. / Invalid job id.`);
     return 1;
   }
-  try {
-    options.jobsRoot = await discoverJobsRoot(job);
-  } catch (error) {
-    fail(error.message);
-    return 1;
+  // --jobs-root wins; discovery is only the convenience default. Overwriting a
+  // supplied root silently served the wrong job store (found 2026-11-22 when a
+  // second root was ignored).
+  if (!options.jobsRoot) {
+    try {
+      options.jobsRoot = await discoverJobsRoot(job);
+    } catch (error) {
+      fail(error.message);
+      return 1;
+    }
   }
   const jobsRoot = path.resolve(options.jobsRoot);
   const distDir = path.resolve(options.dist);

@@ -19,6 +19,10 @@ export const CHAIR_PROFILE = Object.freeze({
   radiusFactor: 0.9,
   minRadius: 1.8,
   maxRadius: 2.7,
+  // Training budget the radius rule was calibrated on. 3000 steps leaves too
+  // few splats for a chair once the room is filtered out (measured
+  // 2026-11-22: 1711 splats and visible streaking versus 5015 at 6000).
+  trainSteps: 6000,
   // Splats considered opaque enough to belong to the subject when measuring
   // that spread, and how far from the ray target they are searched for.
   opaqueAlpha: 0.2,
@@ -49,7 +53,9 @@ export class CleanupError extends ScanError {
 // X_c = R * X_w + t, so the camera centre is -R^T t and its viewing axis is
 // R^T * (0, 0, 1).
 export function quaternionToRotation([qw, qx, qy, qz]) {
-  const norm = Math.hypot(qw, qx, qy, qz) || 1;
+  const norm = Math.hypot(qw, qx, qy, qz);
+  if (!Number.isFinite(norm) || norm < 1e-9)
+    throw new CleanupError("rotasi kamera tidak sah.");
   const w = qw / norm;
   const x = qx / norm;
   const y = qy / norm;
@@ -157,6 +163,31 @@ export function rayTarget(images) {
   const solution = solve3(a, b);
   if (!solution || !solution.every(Number.isFinite))
     throw new CleanupError("titik subjek tidak bisa dihitung.");
+  // Nearly parallel optical axes still produce a finite solution, but one far
+  // outside the capture volume. Reject it here rather than spending a long
+  // training run on a sphere that cannot contain the subject.
+  const origin = [0, 1, 2].map((axis) =>
+    poses.reduce((total, pose) => total + pose.center[axis], 0) / poses.length,
+  );
+  const span = Math.max(
+    1,
+    ...poses.map((pose) =>
+      Math.hypot(
+        pose.center[0] - origin[0],
+        pose.center[1] - origin[1],
+        pose.center[2] - origin[2],
+      ),
+    ),
+  );
+  const offset = Math.hypot(
+    solution[0] - origin[0],
+    solution[1] - origin[1],
+    solution[2] - origin[2],
+  );
+  if (offset > span * 20)
+    throw new CleanupError(
+      "sumbu kamera hampir sejajar, titik subjek tidak pasti.",
+    );
   return solution;
 }
 
@@ -184,10 +215,14 @@ function solve3(matrix, vector) {
 export function parsePly(buffer) {
   if (!Buffer.isBuffer(buffer) || buffer.length < 16)
     throw new CleanupError("berkas .ply kosong.");
-  const headerEnd = buffer.indexOf("end_header\n", 0, "latin1");
-  const headerLength = headerEnd < 0 ? -1 : headerEnd + "end_header\n".length;
-  if (headerLength < 0)
+  // A CRLF header is legal: accept either terminator and skip exactly the bytes
+  // that were found, so the vertex data offset stays correct.
+  const crlfEnd = buffer.indexOf("end_header\r\n", 0, "latin1");
+  const headerEnd = crlfEnd >= 0 ? crlfEnd : buffer.indexOf("end_header\n", 0, "latin1");
+  if (headerEnd < 0)
     throw new CleanupError("berkas .ply tanpa header yang dikenali.");
+  const headerLength =
+    headerEnd + (crlfEnd >= 0 ? "end_header\r\n".length : "end_header\n".length);
   const header = buffer.toString("latin1", 0, headerLength);
   if (!/format\s+binary_little_endian/.test(header))
     throw new CleanupError("format .ply bukan binary little endian.");
@@ -277,6 +312,10 @@ export function subjectRadius(ply, centre, profile = CHAIR_PROFILE) {
     const x = readPlyScalar(ply, vertex, "x");
     const y = readPlyScalar(ply, vertex, "y");
     const z = readPlyScalar(ply, vertex, "z");
+    // NaN comparisons are false, so a damaged vertex would otherwise slip
+    // through the probe and poison the percentile.
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z))
+      continue;
     if (
       Math.hypot(x - centre[0], y - centre[1], z - centre[2]) >
       profile.probeRadius
@@ -297,6 +336,8 @@ export function subjectRadius(ply, centre, profile = CHAIR_PROFILE) {
     Math.hypot(point[0] - median[0], point[1] - median[1], point[2] - median[2]),
   );
   const spread = percentile(distances, 0.9);
+  if (!Number.isFinite(spread) || !Number.isFinite(median[0]))
+    throw new CleanupError("sebaran subjek tidak bisa diukur.");
   const radius = Math.min(
     profile.maxRadius,
     Math.max(profile.minRadius, profile.radiusFactor * spread),
@@ -316,6 +357,10 @@ export function filterPlySphere(ply, centre, radius) {
     const dx = readPlyScalar(ply, vertex, "x") - centre[0];
     const dy = readPlyScalar(ply, vertex, "y") - centre[1];
     const dz = readPlyScalar(ply, vertex, "z") - centre[2];
+    // An invalid distance must not be kept: NaN <= radius is false, but an
+    // infinity would also silently pass when radius is infinite.
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || !Number.isFinite(dz))
+      continue;
     if (Math.hypot(dx, dy, dz) <= radius) keep.push(vertex);
   }
   const header = ply.header.replace(

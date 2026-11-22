@@ -20,7 +20,11 @@ import {
   resolveProfile,
   subjectRadius,
 } from "../server/scan-cleanup.mjs";
-import { buildProvenance, runRealPipeline } from "../server/scan-pipeline.mjs";
+import {
+  buildBrushArgs,
+  buildProvenance,
+  runRealPipeline,
+} from "../server/scan-pipeline.mjs";
 import { createJob, jobPaths } from "../server/scan-jobs.mjs";
 
 const PLY_PROPERTIES = [
@@ -53,6 +57,20 @@ function plyBuffer(rows) {
     });
   });
   return Buffer.concat([Buffer.from(header, "latin1"), body]);
+}
+
+// Same payload with a CRLF header, as some exporters write.
+function plyBufferCrlf(rows) {
+  const lf = plyBuffer(rows);
+  const LF = String.fromCharCode(10);
+  const marker = "end_header" + LF;
+  const headerEnd = lf.indexOf(Buffer.from(marker, "latin1")) + marker.length;
+  const header = lf
+    .subarray(0, headerEnd)
+    .toString("latin1")
+    .split(LF)
+    .join(String.fromCharCode(13, 10));
+  return Buffer.concat([Buffer.from(header, "latin1"), lf.subarray(headerEnd)]);
 }
 
 // alpha is linear opacity; the PLY stores its logit.
@@ -337,6 +355,58 @@ test("planSubjectCleanup centres the sphere on the ray target", () => {
   }
 });
 
+test("parsePly accepts a CRLF header and still finds the vertex data", () => {
+  const rows = [
+    { x: 1, y: 2, z: 3, opacity: 0.5 },
+    { x: 4, y: 5, z: 6, opacity: -0.5 },
+  ];
+  const lf = parsePly(plyBuffer(rows));
+  const crlf = parsePly(plyBufferCrlf(rows));
+  assert.equal(crlf.count, 2);
+  assert.equal(crlf.stride, lf.stride);
+  assert.deepEqual(plyPositions(crlf), plyPositions(lf));
+  assert.equal(readPlyScalar(crlf, 1, "x"), 4);
+});
+
+test("quaternionToRotation rejects a degenerate camera rotation", () => {
+  assert.throws(() => quaternionToRotation([0, 0, 0, 0]), CleanupError);
+  assert.throws(() => quaternionToRotation([NaN, 0, 0, 1]), CleanupError);
+  // A unit quaternion still works.
+  assert.deepEqual(quaternionToRotation([1, 0, 0, 0]), [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ]);
+});
+
+test("rayTarget rejects a target thrown far outside the capture by near-parallel axes", () => {
+  const centres = [];
+  for (let index = 0; index < 12; index += 1)
+    centres.push([Math.cos(index) * 3, 0, Math.sin(index) * 3]);
+  const model = imagesBin(centres);
+  // All cameras look at the origin here, so the target is well conditioned.
+  assert.ok(Math.hypot(...rayTarget(parseImagesBin(model))) < 0.05);
+  // Nearly parallel axes resolve to a point far beyond any capture volume.
+  const flat = parseImagesBin(imagesBin(centres, [1000, 0, 0]));
+  assert.throws(() => rayTarget(flat), CleanupError);
+});
+
+test("subjectRadius ignores non-finite vertices instead of returning NaN", () => {
+  const rows = [
+    ...shellRows({ radius: 0.8, count: 600, alpha: 0.6, centre: [0, 0.9, 0] }),
+    ...shellRows({ radius: 2.2, count: 400, alpha: 0.6, centre: [0, 0.9, 0] }),
+    { x: Number.NaN, y: 0, z: 0, opacity: 2 },
+    { x: 0, y: Number.POSITIVE_INFINITY, z: 0, opacity: 2 },
+  ];
+  const result = subjectRadius(parsePly(plyBuffer(rows)), [0, 0, 0]);
+  assert.ok(Number.isFinite(result.radius), String(result.radius));
+  assert.ok(Number.isFinite(result.spread), String(result.spread));
+  assert.equal(result.opaqueSplats, 1000);
+  const filtered = filterPlySphere(parsePly(plyBuffer(rows)), [0, 0.9, 0], 10);
+  // The two damaged rows are dropped, the healthy ones survive.
+  assert.equal(filtered.kept, 1000);
+});
+
 test("filterPlySphere keeps rows intact and rewrites the vertex count", () => {
   const rows = [
     { x: 0, y: 0, z: 0, opacity: 0, scale_1: 0.25 },
@@ -508,6 +578,12 @@ test("runRealPipeline applies the chair profile and records it", async () => {
   assert.ok(result.provenance.profile.splatsAfter < 1200);
   assert.ok(Math.abs(result.provenance.profile.centre[0]) < 1e-6);
   assert.equal(result.provenance.timings.cleanupMs >= 0, true);
+  // The profile carries the training budget its radius rule was validated on;
+  // the 3000-step default export is too thin once the room is filtered out.
+  assert.equal(result.provenance.profile.trainSteps, 6000);
+  const brushCall = calls.find(([name, args]) => name === "brush" && args[0] !== "--version");
+  const steps = brushCall[1][brushCall[1].indexOf("--total-steps") + 1];
+  assert.equal(steps, "6000");
   assert.deepEqual(stages, [
     "validating",
     "extracting",
@@ -580,6 +656,10 @@ test("runRealPipeline keeps the default path untouched", async () => {
   });
   const conversion = calls.find(([name]) => name === "splatTransform");
   assert.ok(conversion[1][0].endsWith("scan.ply"), conversion[1][0]);
+  // The default path keeps the 3000-step budget: a profile coupling must not
+  // leak into it.
+  const brushCall = calls.find(([name, args]) => name === "brush" && args[0] !== "--version");
+  assert.equal(brushCall[1][brushCall[1].indexOf("--total-steps") + 1], "3000");
   assert.equal(result.provenance.profile, undefined);
   assert.equal(result.provenance.timings.cleanupMs, undefined);
   assert.deepEqual(Object.keys(result.provenance).sort(), [
@@ -589,6 +669,20 @@ test("runRealPipeline keeps the default path untouched", async () => {
     "timings",
     "tools",
   ]);
+});
+
+test("runRealPipeline keeps the default 3000-step training budget", async () => {
+  // Covered end to end in scan-pipeline.test.js; this pins the profile coupling.
+  assert.equal(CHAIR_PROFILE.trainSteps, 6000);
+  const args = buildBrushArgs({ datasetDir: "D:\d", outputPly: "D:\o\scan.ply" });
+  assert.equal(args[args.indexOf("--total-steps") + 1], "3000");
+  const chairArgs = buildBrushArgs({
+    datasetDir: "D:\d",
+    outputPly: "D:\o\scan.ply",
+    steps: CHAIR_PROFILE.trainSteps,
+  });
+  assert.equal(chairArgs[chairArgs.indexOf("--total-steps") + 1], "6000");
+  assert.equal(chairArgs[chairArgs.indexOf("--export-every") + 1], "6000");
 });
 
 test("a failing cleanup falls back to the untouched export", async () => {
@@ -656,4 +750,8 @@ test("a failing cleanup falls back to the untouched export", async () => {
   assert.ok(conversion[1][0].endsWith("scan.ply"), conversion[1][0]);
   assert.equal(result.provenance.profile.applied, false);
   assert.match(result.provenance.profile.reason, /images\.bin|model/i);
+  // No usable subject point means no sphere, so the longer profile budget must
+  // not be paid for either.
+  const brushCall = calls.find(([name, args]) => name === "brush" && args[0] !== "--version");
+  assert.equal(brushCall[1][brushCall[1].indexOf("--total-steps") + 1], "3000");
 });
