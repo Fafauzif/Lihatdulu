@@ -1,8 +1,15 @@
-import { copyFile, cp, mkdir, readdir, rm, stat, statfs } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile, readdir, rm, stat, statfs, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { jobPaths } from "./scan-jobs.mjs";
 import { runTool as defaultRunTool } from "./scan-tools.mjs";
 import { ScanError } from "./scan-errors.mjs";
+import {
+  CHAIR_PROFILE,
+  parseImagesBin,
+  planSubjectCleanup,
+  rayTarget,
+  resolveProfile,
+} from "./scan-cleanup.mjs";
 
 // Commands recorded from the actual binaries on the Helios:
 // COLMAP 4.2.1 (CUDA) and Brush 0.3.0 (`brush_app.exe`).
@@ -260,10 +267,11 @@ export function buildProvenance({
   timings,
   artifact,
   tools = {},
+  profile = null,
 }) {
   const extracted = frames.extracted;
   const registered = frames.registered;
-  return {
+  const provenance = {
     source: {
       clipSeconds: media.durationS,
       device: device || "",
@@ -288,6 +296,11 @@ export function buildProvenance({
       splatTransform: tools.splatTransform ?? "",
     },
   };
+  // Opt-in profiles add one field; the default run keeps the recorded shape so
+  // stored jobs and existing readers are unchanged.
+  if (profile && profile.name && profile.name !== "default")
+    provenance.profile = profile;
+  return provenance;
 }
 
 async function defaultDiskFree(dir) {
@@ -332,9 +345,13 @@ export async function runRealPipeline(
     diskFree = defaultDiskFree,
     signal,
     limits = {},
+    profile,
   } = {},
 ) {
   const rules = { ...DEFAULT_LIMITS, ...limits };
+  // Opt-in cleanup profile; SCAN_PROFILE=chair selects the subject sphere.
+  // Anything else keeps the recorded default pipeline byte for byte.
+  const activeProfile = resolveProfile(profile ?? process.env.SCAN_PROFILE);
   const tool = (name, args, options = {}) =>
     runTool(name, args, { ...options, signal });
   const paths = jobPaths(root, record.id);
@@ -474,6 +491,22 @@ export async function runRealPipeline(
     recursive: true,
   });
 
+  // The chair profile needs the piece of furniture's position in the aligned
+  // world frame. The least-squares intersection of the camera optical axes is
+  // that point: the cameras orbit the subject, not the room.
+  let subjectCentre = null;
+  let profileNote = "";
+  if (activeProfile === CHAIR_PROFILE.name) {
+    try {
+      const images = parseImagesBin(
+        await readFile(join(sparse, bestModel.name, "images.bin")),
+      );
+      subjectCentre = rayTarget(images);
+    } catch (error) {
+      profileNote = error instanceof Error ? error.message : String(error);
+    }
+  }
+
   await updateStage("reconstructing");
   await mkdir(paths.output, { recursive: true });
   const outputPly = join(paths.work, "scan.ply");
@@ -489,12 +522,43 @@ export async function runRealPipeline(
   timings.trainMs = brush.ms;
   const ply = await findBrushOutput(paths.work);
 
+  // Keep only the subject sphere. The centre comes from the camera axes above
+  // and the radius from the opaque mass of this take's own export, so one
+  // profile works across takes with different reconstruction spread.
+  let convertPly = ply;
+  let profileRecord = { name: activeProfile };
+  if (activeProfile === CHAIR_PROFILE.name) {
+    if (!subjectCentre) {
+      profileRecord = {
+        name: activeProfile,
+        applied: false,
+        reason: profileNote || "titik subjek tidak tersedia.",
+      };
+    } else {
+      const cleanupStarted = Date.now();
+      try {
+        const cleaned = planSubjectCleanup(await readFile(ply), subjectCentre);
+        const cleanedPly = join(paths.work, "scan-subject.ply");
+        await writeFile(cleanedPly, cleaned.buffer);
+        convertPly = cleanedPly;
+        profileRecord = { name: activeProfile, applied: true, ...cleaned.stats };
+      } catch (error) {
+        profileRecord = {
+          name: activeProfile,
+          applied: false,
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
+      timings.cleanupMs = Date.now() - cleanupStarted;
+    }
+  }
+
   await updateStage("finalizing");
   const spz = join(paths.output, "scan.spz");
   const convertStarted = Date.now();
   let conversion = await tool(
     "splatTransform",
-    buildConvertArgs({ inputPly: ply, outputSpz: spz, info: true }),
+    buildConvertArgs({ inputPly: convertPly, outputSpz: spz, info: true }),
     { timeoutMs: TIMEOUTS.convert, logPath: join(paths.logs, "convert.log") },
   );
   let splatCount = parseSplatCount(conversion.stdout);
@@ -503,7 +567,7 @@ export async function runRealPipeline(
     const small = join(paths.work, "scan-small.ply");
     await tool(
       "splatTransform",
-      buildDecimateArgs({ inputPly: ply, outputPly: small }),
+      buildDecimateArgs({ inputPly: convertPly, outputPly: small }),
       { timeoutMs: TIMEOUTS.convert, logPath: join(paths.logs, "decimate.log") },
     );
     conversion = await tool(
@@ -539,7 +603,11 @@ export async function runRealPipeline(
     stills: stillFiles,
   };
   timings.totalMs =
-    timings.extractMs + timings.alignMs + timings.trainMs + timings.convertMs;
+    timings.extractMs +
+    timings.alignMs +
+    timings.trainMs +
+    timings.convertMs +
+    (timings.cleanupMs ?? 0);
   const tools = await readToolVersions(runTool, paths.logs);
   const provenance = buildProvenance({
     media,
@@ -548,6 +616,7 @@ export async function runRealPipeline(
     timings,
     artifact,
     tools,
+    profile: profileRecord,
   });
 
   await rm(paths.work, { recursive: true, force: true });
