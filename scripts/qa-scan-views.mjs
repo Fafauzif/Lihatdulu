@@ -32,6 +32,12 @@ import { isJobId, readJob } from "../server/scan-jobs.mjs";
 // initial values (0.5 degree / 0.005 dolly tolerance). Screenshots before and
 // after each drag are saved in --out and report.json records the poses.
 //
+// --lifecycle-proof drags once, then resizes the viewport (1024x768, 390x844,
+// back to wide), leaving the scan route through an in-app link and re-entering
+// it with history back and a reload. It asserts that resizing keeps the camera
+// pose and splat count, that leaving disposes the viewer, and that every
+// re-entry reaches "ready" with the initial pose again.
+//
 // Run from the repository root. Requires a built dist (npm run build) unless
 // --dist points at an existing build (the before baseline uses the primary
 // checkout's dist). Every PNG is evidence on disk only.
@@ -65,6 +71,8 @@ Options:
   --width <n>         Viewport width. Default: 1440
   --height <n>        Viewport height. Default: 900
   --orbit-proof       Drag/touch orbit + reset assertions instead of captures.
+  --lifecycle-proof   Resize, route re-entry and reload assertions instead of
+                      captures.
   --help, -h          Show this message.`;
 
 function log(message) {
@@ -161,6 +169,7 @@ function parseArgs(argv) {
     width: WIDE_VIEWPORT.width,
     height: WIDE_VIEWPORT.height,
     orbitProof: false,
+    lifecycleProof: false,
     help: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -171,6 +180,10 @@ function parseArgs(argv) {
     }
     if (argument === "--orbit-proof") {
       options.orbitProof = true;
+      continue;
+    }
+    if (argument === "--lifecycle-proof") {
+      options.lifecycleProof = true;
       continue;
     }
     const match = /^--(job|jobs-root|dist|out|poses|width|height)(?:=(.*))?$/.exec(
@@ -596,6 +609,211 @@ async function orbitProofMode(browser, server, options, outDir) {
   return report;
 }
 
+const LIFECYCLE_VIEWPORTS = [
+  { width: 1024, height: 768, label: "resize-1024x768" },
+  { width: NARROW_VIEWPORT.width, height: NARROW_VIEWPORT.height, label: "resize-390x844" },
+  { width: WIDE_VIEWPORT.width, height: WIDE_VIEWPORT.height, label: "resize-1440x900" },
+];
+
+async function readCanvasBox(page) {
+  return page.$eval(CANVAS_SELECTOR, (canvas) => {
+    const host = canvas.closest("[data-scan-viewer]");
+    return {
+      css: { width: canvas.clientWidth, height: canvas.clientHeight },
+      host: {
+        width: host?.clientWidth ?? 0,
+        height: host?.clientHeight ?? 0,
+      },
+      backing: { width: canvas.width, height: canvas.height },
+    };
+  });
+}
+
+// Drag once, then prove the camera pose and the splat set survive resizes, that
+// leaving the route disposes the viewer, and that history back plus a reload
+// both rebuild it at the initial pose.
+async function lifecycleProofMode(browser, server, options, outDir) {
+  const report = {
+    mode: "lifecycle-proof",
+    job: options.job,
+    width: options.width,
+    height: options.height,
+    dist: path.resolve(options.dist),
+    jobsRoot: path.resolve(options.jobsRoot),
+    generatedAt: new Date().toISOString(),
+    initial: {},
+    posed: null,
+    resizes: [],
+    routeLeave: {},
+    routeReentry: {},
+    reload: {},
+    checks: [],
+    images: [],
+  };
+  const check = (name, pass, detail) => {
+    report.checks.push({ name, pass, ...detail });
+    if (!pass) fail(`check gagal: ${name} ${JSON.stringify(detail)}`);
+  };
+
+  const context = await browser.newContext({
+    viewport: { width: options.width, height: options.height },
+  });
+  try {
+    const page = await context.newPage();
+    await waitForReady(page, server.url, options.job);
+    const initial = await readFacts(page);
+    report.initial = initial;
+    check(
+      "viewer mencapai state ready dengan jumlah splat > 0",
+      initial.state === "ready" && initial.splats > 0,
+      { state: initial.state, splats: initial.splats },
+    );
+    check(
+      "viewer mengekspos API pose dan tombol Atur ulang",
+      initial.hasPoseApi && initial.resetLabel !== null && initial.resetHidden === false,
+      { hasPoseApi: initial.hasPoseApi, resetLabel: initial.resetLabel, resetHidden: initial.resetHidden },
+    );
+    const initialShot = await saveViewerShot(page, outDir, "lifecycle-initial");
+    report.images.push(initialShot.viewer, initialShot.page);
+
+    await dragMouse(page);
+    const posed = await getPose(page);
+    report.posed = posed;
+    const dragDelta = angularDelta(posed.azimuthDeg, initial.pose.azimuthDeg);
+    check("drag mengubah pose sebelum resize", dragDelta > ORBIT_MIN_DEGREES, {
+      azimuthDelta: dragDelta,
+    });
+
+    for (const viewport of LIFECYCLE_VIEWPORTS) {
+      await page.setViewportSize({
+        width: viewport.width,
+        height: viewport.height,
+      });
+      await page.waitForTimeout(SETTLE_MS);
+      const facts = await readFacts(page);
+      const canvas = await readCanvasBox(page);
+      const poseKept = poseClose(facts.pose, posed);
+      const splatsKept = facts.state === "ready" && facts.splats === initial.splats;
+      const canvasFits =
+        Math.abs(canvas.css.width - canvas.host.width) <= 2 &&
+        Math.abs(canvas.css.height - canvas.host.height) <= 2 &&
+        canvas.backing.width > 0 &&
+        canvas.backing.height > 0;
+      report.resizes.push({
+        viewport,
+        pose: facts.pose,
+        poseKept,
+        splats: facts.splats,
+        canvas,
+      });
+      check(
+        `${viewport.label} menjaga pose kamera`,
+        poseKept,
+        { pose: facts.pose, expected: posed },
+      );
+      check(`${viewport.label} tetap ready dengan jumlah splat sama`, splatsKept, {
+        state: facts.state,
+        splats: facts.splats,
+        expectedSplats: initial.splats,
+      });
+      check(`${viewport.label} canvas mengikuti ukuran host`, canvasFits, { canvas });
+      const shot = await saveViewerShot(page, outDir, `lifecycle-${viewport.label}`);
+      report.images.push(shot.viewer, shot.page);
+    }
+
+    const leaveTarget = await page
+      .locator('a.brand[data-nav]')
+      .first()
+      .getAttribute("href");
+    await page.locator('a.brand[data-nav]').first().click();
+    await page.waitForFunction(
+      () => !document.querySelector("[data-scan-viewer]"),
+      undefined,
+      { timeout: 15_000 },
+    );
+    const afterLeave = await page.evaluate(() => ({
+      path: location.pathname,
+      viewers: document.querySelectorAll("[data-scan-viewer]").length,
+      bodies: document.querySelectorAll("canvas.scan-viewer-canvas").length,
+    }));
+    report.routeLeave = { target: leaveTarget, ...afterLeave };
+    check(
+      "navigasi dalam aplikasi meninggalkan rute pindai dan membuang viewer",
+      afterLeave.path !== `/pindai/${options.job}` &&
+        afterLeave.viewers === 0 &&
+        afterLeave.bodies === 0,
+      report.routeLeave,
+    );
+    await page.screenshot({
+      path: path.join(outDir, "lifecycle-route-left-page.png"),
+    });
+    report.images.push(path.join(outDir, "lifecycle-route-left-page.png"));
+
+    await page.goBack();
+    await waitForReady(page, server.url, options.job);
+    const reentry = await readFacts(page);
+    const reentryPose = reentry.pose;
+    const reentryDefault = poseClose(reentryPose, initial.pose);
+    const reentryDiffersFromDrag = angularDelta(reentryPose.azimuthDeg, posed.azimuthDeg) > ORBIT_MIN_DEGREES;
+    report.routeReentry = {
+      path: await page.evaluate(() => location.pathname),
+      pose: reentryPose,
+      resetMatchesInitial: reentryDefault,
+      differsFromDraggedPose: reentryDiffersFromDrag,
+      splats: reentry.splats,
+      state: reentry.state,
+    };
+    check(
+      "kembali ke rute pindai memuat viewer sampai ready dengan splat yang sama",
+      reentry.state === "ready" && reentry.splats === initial.splats,
+      { state: reentry.state, splats: reentry.splats, expected: initial.splats },
+    );
+    check(
+      "re-entry memakai pose awal, bukan pose hasil drag",
+      reentryDefault && reentryDiffersFromDrag,
+      { pose: reentryPose, initialPose: initial.pose, draggedPose: posed },
+    );
+    const reentryShot = await saveViewerShot(page, outDir, "lifecycle-route-reentry");
+    report.images.push(reentryShot.viewer, reentryShot.page);
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector(READY_SELECTOR, { timeout: READY_TIMEOUT_MS });
+    await page.waitForTimeout(SETTLE_MS);
+    const reloaded = await readFacts(page);
+    report.reload = {
+      state: reloaded.state,
+      splats: reloaded.splats,
+      pose: reloaded.pose,
+      resetMatchesInitial: poseClose(reloaded.pose, initial.pose),
+    };
+    check(
+      "muat ulang penuh membangun kembali viewer sampai ready",
+      reloaded.state === "ready" && reloaded.splats === initial.splats,
+      { state: reloaded.state, splats: reloaded.splats, expected: initial.splats },
+    );
+    check(
+      "muat ulang penuh kembali ke pose awal",
+      report.reload.resetMatchesInitial,
+      { pose: reloaded.pose, initialPose: initial.pose },
+    );
+    const reloadShot = await saveViewerShot(page, outDir, "lifecycle-reload");
+    report.images.push(reloadShot.viewer, reloadShot.page);
+  } finally {
+    await context.close().catch(() => {});
+  }
+
+  await fs.writeFile(
+    path.join(outDir, "report.json"),
+    `${JSON.stringify(report, null, 2)}\n`,
+    "utf8",
+  );
+  const failed = report.checks.filter((entry) => !entry.pass);
+  log(
+    `lifecycle proof: ${report.checks.length - failed.length}/${report.checks.length} checks lulus`,
+  );
+  return report;
+}
+
 function JsonShort(value) {
   try {
     return JSON.stringify(value);
@@ -682,8 +900,10 @@ async function main() {
     });
     const report = options.orbitProof
       ? await orbitProofMode(browser, server, options, outDir)
-      : await captureMode(browser, server, options, outDir);
-    if (options.orbitProof) {
+      : options.lifecycleProof
+        ? await lifecycleProofMode(browser, server, options, outDir)
+        : await captureMode(browser, server, options, outDir);
+    if (options.orbitProof || options.lifecycleProof) {
       return report.checks.every((entry) => entry.pass) ? 0 : 1;
     }
     if (report.state !== "ready" || report.splats <= 0) {
