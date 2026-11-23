@@ -6,8 +6,9 @@ LihatDulu does not reconstruct on a laptop anymore. The server samples a few
 dozen stills from the seller's clip, sends them to
 [KIRI Engine](https://docs.kiriengine.app/), validates the returned artifact and
 serves it from storage we control. Two artifacts are supported: an SPZ splat
-cloud from the 3DGS routes, and a GLB mesh from the featureless-object route
-(`KIRI_INPUT=mesh`), which is the one that produced a recognizable chair. The
+cloud from the 3DGS routes, and a GLB mesh. The shipped default is **Photo Scan
+with automatic masking** (`KIRI_INPUT=photo`, Ultra), because it is the only
+route that returns the chair alone — one credit, two to four minutes. The
 browser flow is **upload-only** for now: choose an existing MP4, preview it,
 confirm the cloud send, watch the stages, then orbit the saved result.
 In-browser camera capture comes only after one real clip has passed end-to-end.
@@ -56,31 +57,39 @@ Proven against the real KIRI API (one paid job, 22 November 2026):
   same job without resubmitting.
 - Total submit → ready was 37 min 54 s. Evidence: `var/kiri-live/report.json`.
 
-Proven against the real KIRI API (overnight matrix, 22–23 November 2026, seven
-of eight credits):
+Proven against the real KIRI API (overnight matrix and follow-ups, 22–23
+November 2026; six credits spent on the current key, four left):
 
-- **`KIRI_INPUT=mesh` produces a usable chair** from 101 stills of the golden
-  clip: 815 094 triangles, one texture, 36 min, serial
-  `b3217f601ab1485591c33bbea6951f3c`. Contact sheet:
-  `docs/handoff/assets/kiri-mesh-chair.png`.
-- The same clip through the 3DGS video and photo routes does not: room soup at
-  9.5–11 m, or a melted blob.
+- **Photo Scan with masking on is the route that returns the chair alone.** 101
+  stills from the golden clip, `modelQuality=3` (Ultra), `textureQuality=0` (4K),
+  `isMask=1` → 2 136 020 B GLB, 1 m 2 s upload, 2 m 15 s KIRI, 3 m 42 s total,
+  serial `2156501db4bf49ca9de872f929188431`. No crop, no cleanup heuristic. The
+  same stills with `isMask=0` return 7.4 MB of room.
+- **Every other route fails on this subject.** 3DGS video and 3DGS stills return
+  room-scale soups (4.6–11 m extents), the featureless mesh returns a room shell
+  around the chair, a second clip returns a bubble enclosing the chair, and a
+  sharp-frame subset inflates the backrest. Table of serials and sizes in
+  [kiri-scan.md](../kiri-scan.md).
+- **The remaining defect is the capture, not the pipeline.** The backrest is a
+  translucent knit net: KIRI's mesh is topologically closed, so the missing patch
+  has no boundary to fill, and the 3DGS route that could carry it will not
+  isolate the subject. `/jual/pindai` now states the four capture rules this
+  produced, and the result page states the caveat under the viewer.
 
 Still unproven:
 
-- The mesh is room-scale, so the room shell frames the result and the front view
-  is a lit wall. A mesh-side subject crop is not implemented.
-- Whether the mesh profile generalises to a second clip, and what it costs on a
-  longer capture.
+- A capture of a matte, solid chair: no route was tried on one, so the defect
+  may simply not occur there. This is the next honest experiment.
+- Whether Photo Scan generalises beyond two clips, and what a longer capture
+  costs in upload time.
 - KIRI key handling on the actual demo host, credit budget and retention.
 - Phone/browser and network behaviour for a real seller.
 - The in-browser camera path, deliberately deferred.
 
 ## Next step
 
-One credit is left. Spend it on the mesh profile with a second clip
-(`KIRI_MOCK=0 KIRI_INPUT=mesh npm run scan:serve`) to see whether the chair
-result generalises, then decide between a mesh subject crop and capture
-guidance. The repeat command and recorded numbers are in
-[kiri-scan.md](../kiri-scan.md#repeating-the-live-test). Keep the camera deferred
-until a second mesh model visibly passes.
+Four credits are left. The cheapest decisive experiment is a **matte, solid
+upholstered chair** through the shipped default (`KIRI_MOCK=0 npm run scan:serve`)
+— same command, one credit, and it tests the diagnosis rather than repeating the
+net-back chair. Judge it on the four matched poses before spending a second
+credit. Keep the camera deferred until one capture visibly passes.
