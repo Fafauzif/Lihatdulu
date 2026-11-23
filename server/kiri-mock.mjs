@@ -317,6 +317,25 @@ export function createMockClient({
 
     // Mesh profile stand-in: the same stills, recorded as a mesh job so the
     // download hands back a GLB instead of a splat cloud.
+    // Photo Scan answers with a mesh too, so the mock reuses the synthetic chair
+    // GLB and only differs in the recorded mode and calculateType (1 = Photo).
+    async submitPhotoImages({ files = [], jobDir, modelQuality, textureQuality } = {}) {
+      if (await shouldFail("submit"))
+        throw new KiriError("kiri_unavailable", {
+          detail: "Kegagalan simulasi saat mengunggah.",
+        });
+      const serial = `mock-photo-${String(files.length).padStart(4, "0")}`;
+      await writeState(jobDir, {
+        serial,
+        mode: "photo",
+        modelQuality,
+        textureQuality,
+        createdAt: new Date(now()).toISOString(),
+        failMode,
+      });
+      return { serial, calculateType: 1 };
+    },
+
     async submitFeaturelessImages({ files = [], jobDir } = {}) {
       if (await shouldFail("submit"))
         throw new KiriError("kiri_unavailable", {
@@ -351,10 +370,12 @@ export function createMockClient({
           detail: "Kegagalan simulasi saat mengunduh ZIP.",
         });
       const state = jobDir ? await readState(jobDir) : null;
-      // A mesh job stands in for KIRI's featureless export: one GLB plus the
-      // camera set, exactly the shape the live ZIP has.
+      // Both mesh routes stand in for a KIRI mesh export: one GLB plus the
+      // camera set, exactly the shape the live ZIP has. Photo Scan and the
+      // featureless pipeline differ upstream, not in the artifact they return.
+      const meshJob = state?.mode === "mesh" || state?.mode === "photo";
       const zip = zipStore(
-        state?.mode === "mesh"
+        meshJob
           ? [
               { name: "3DModel.glb", data: syntheticChairGlb() },
               {

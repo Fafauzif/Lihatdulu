@@ -90,6 +90,63 @@ test("submitImages refuses an empty photo set without calling KIRI", async () =>
   });
 });
 
+test("submitPhotoImages sends KIRI's Photo Scan form with its quality knobs", async (t) => {
+  const first = await tempVideo(t);
+  const second = await tempVideo(t);
+  let seen;
+  const client = createKiriClient({
+    apiKey: "kiri-secret",
+    fetchImpl: async (url, options) => {
+      seen = { url, options };
+      return jsonResponse({
+        code: 0,
+        msg: "success",
+        data: { serialize: "photoscan123456", calculateType: 1 },
+        ok: true,
+      });
+    },
+  });
+  const result = await client.submitPhotoImages({
+    files: [
+      { path: first, filename: "0001.jpg" },
+      { path: second, filename: "0002.jpg" },
+    ],
+    mask: 1,
+    modelQuality: 3,
+    textureQuality: 0,
+    textureSmoothing: 0,
+  });
+  assert.equal(result.serial, "photoscan123456");
+  assert.equal(result.calculateType, 1);
+  assert.match(seen.url, /\/v1\/open\/photo\/image$/);
+  assert.equal(seen.options.method, "POST");
+  assert.equal(seen.options.headers.authorization, "Bearer kiri-secret");
+  const form = seen.options.body;
+  assert.equal(form.get("modelQuality"), "3");
+  assert.equal(form.get("textureQuality"), "0");
+  assert.equal(form.get("textureSmoothing"), "0");
+  assert.equal(form.get("isMask"), "1");
+  assert.equal(form.get("fileFormat"), "GLB");
+  assert.deepEqual(
+    form.getAll("imagesFiles").map((file) => file.name),
+    ["0001.jpg", "0002.jpg"],
+  );
+});
+
+test("submitPhotoImages refuses an empty set without calling KIRI", async () => {
+  const client = createKiriClient({
+    apiKey: "k",
+    fetchImpl: async () => {
+      throw new Error("must not fetch");
+    },
+  });
+  await assert.rejects(client.submitPhotoImages({ files: [] }), (error) => {
+    assert.equal(error.code, "kiri_unavailable");
+    assert.equal(error.detail, "Foto kosong.");
+    return true;
+  });
+});
+
 test("submitFeaturelessImages asks the mesh endpoint for a GLB", async (t) => {
   const first = await tempVideo(t);
   const second = await tempVideo(t);

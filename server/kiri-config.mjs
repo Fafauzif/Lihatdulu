@@ -54,7 +54,27 @@ function positive(value, fallback) {
   return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
-const INPUT_MODES = new Set(["video", "photo", "mesh"]);
+// video : the clip itself, KIRI's 3DGS video route (splats)
+// splat : stills to the 3DGS image route (splats, one object per set)
+// photo : stills to the Photo Scan route (mesh) — KIRI's own answer for an
+//         ordinary textured object, and the only route with quality knobs
+// mesh  : stills to the featureless-object route (mesh)
+const INPUT_MODES = new Set(["video", "splat", "photo", "mesh"]);
+
+// Routes that answer with a mesh artifact (GLB) instead of splats.
+export const MESH_MODES = new Set(["photo", "mesh"]);
+
+export function artifactKind(mode) {
+  return MESH_MODES.has(mode) ? "mesh" : "splat";
+}
+
+// KIRI numbers modelQuality 0=High 1=Medium 2=Low 3=Ultra and textureQuality
+// 0=4K 1=2K 2=1K 3=8K. 0 is the documented default and already means "best" for
+// modelQuality, so the product default is 0/0 and Ultra is opt-in.
+function quality(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 && number <= 3 ? number : fallback;
+}
 
 export function inputMode(value) {
   const text = String(value ?? "").trim().toLowerCase();
@@ -137,16 +157,22 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
     ),
     isMask: env.KIRI_ISMASK === "0" ? 0 : 1,
     input: {
-      // "photo" samples the clip into stills and submits them to KIRI's 3DGS
-      // photo endpoint; "mesh" samples the same stills but asks for the
-      // featureless-object mesh pipeline, which returns a GLB; "video" sends
-      // the clip itself. Video stays the default.
+      // See INPUT_MODES above: "video" sends the clip, "splat" and "photo" send
+      // stills to the 3DGS and Photo Scan routes, "mesh" asks the
+      // featureless-object pipeline for a GLB. Video stays the default.
       mode: inputMode(env.KIRI_INPUT || DEFAULTS.inputMode),
       fps: positive(env.KIRI_FRAME_FPS, DEFAULTS.frameFps),
       photos: positive(env.KIRI_PHOTO_COUNT, DEFAULTS.photoCount),
-      // What the mesh pipeline should return. KIRI's docs also allow OBJ/PLY;
-      // the prototype only reads GLB, so anything else is refused upstream.
+      // What a mesh-producing route should return. KIRI's docs also allow
+      // OBJ/PLY; the prototype only reads GLB, so anything else is refused
+      // upstream.
       fileFormat: "GLB",
+      // Photo Scan only. Documented at
+      // https://docs.kiriengine.app/photo-scan/image-upload
+      modelQuality: quality(env.KIRI_MODEL_QUALITY, 0),
+      textureQuality: quality(env.KIRI_TEXTURE_QUALITY, 0),
+      // Docs recommend smoothing off for professional scans that need precision.
+      textureSmoothing: flag(env.KIRI_TEXTURE_SMOOTHING, false) ? 1 : 0,
     },
     requestTimeoutMs: positive(
       env.KIRI_REQUEST_TIMEOUT_MS,
@@ -186,6 +212,7 @@ export function publicConfig(config) {
     // Only the mode name is public; the key, the paths and the profile's other
     // knobs stay on the server.
     inputMode: config.input?.mode ?? "video",
+    artifactKind: config.input ? (MESH_MODES.has(config.input.mode) ? "mesh" : "splat") : "splat",
     poll: { ...config.poll },
   };
 }

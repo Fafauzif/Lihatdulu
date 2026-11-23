@@ -325,9 +325,9 @@ test("the default profile leaves the export uncropped", async (t) => {
   assert.equal(ready.crop, null);
 });
 
-// --- KIRI photo profile ----------------------------------------------------
+// --- KIRI splat profile: stills to the 3DGS route ----------------
 
-function photoSetup(
+function splatSetup(
   t,
   { extract, submitImages, submitVideo } = {},
 ) {
@@ -339,7 +339,7 @@ function photoSetup(
       {
         KIRI_API_KEY: "kiri-test-key",
         KIRI_JOBS_ROOT: jobsRoot,
-        KIRI_INPUT: "photo",
+        KIRI_INPUT: "splat",
         KIRI_POLL_MIN_MS: "600000",
         KIRI_POLL_MAX_MS: "600000",
       },
@@ -383,8 +383,8 @@ function photoSetup(
   });
 }
 
-test("photo profile samples the clip and submits its stills", async (t) => {
-  const { jobsRoot, calls, upload, config } = await photoSetup(t);
+test("the splat profile samples the clip and submits its stills", async (t) => {
+  const { jobsRoot, calls, upload, config } = await splatSetup(t);
   const { job } = await upload();
   assert.equal(calls.images.length, 1);
   assert.equal(calls.video.length, 0);
@@ -394,7 +394,7 @@ test("photo profile samples the clip and submits its stills", async (t) => {
   assert.equal(calls.extract[0].fps, 4);
   assert.equal(calls.extract[0].count, 120);
   const stored = await readJob(jobsRoot, job.id);
-  assert.equal(stored.input.mode, "photo");
+  assert.equal(stored.input.mode, "splat");
   assert.equal(stored.input.photos, 24);
   assert.equal(stored.kiri.serial, "photoserial12345");
   // The sampled stills are transient: only the job record and the SPZ stay.
@@ -403,7 +403,7 @@ test("photo profile samples the clip and submits its stills", async (t) => {
 });
 
 test("a missing ffmpeg falls back to the video upload", async (t) => {
-  const { jobsRoot, calls, upload } = await photoSetup(t, {
+  const { jobsRoot, calls, upload } = await splatSetup(t, {
     extract: () => {
       throw new KiriError("kiri_unavailable", { detail: "ffmpeg tidak ada di PATH" });
     },
@@ -418,8 +418,8 @@ test("a missing ffmpeg falls back to the video upload", async (t) => {
   assert.equal(stored.kiri.serial, "videoserial1234");
 });
 
-test("a photo submit failure is not retried as a video submit", async (t) => {
-  const { jobsRoot, calls, upload } = await photoSetup(t, {
+test("a stills submit failure is not retried as a video submit", async (t) => {
+  const { jobsRoot, calls, upload } = await splatSetup(t, {
     submitImages: () => {
       throw new KiriError("kiri_no_credit");
     },
@@ -471,6 +471,78 @@ test("the default profile still uploads the video itself", async (t) => {
   assert.equal(calls.images, 0);
   assert.equal(calls.extract, 0);
   assert.equal((await readJob(jobsRoot, job.id)).input.mode, "video");
+});
+
+// --- KIRI Photo Scan profile ----------------------------------------------
+
+// Photo Scan is the route that actually reconstructs a single object: it takes
+// stills, masks the subject itself and returns a mesh. Everything below records
+// what the seller paid for, because a quality claim without provenance is a
+// guess.
+test("photo profile sends stills to Photo Scan and records the quality knobs", async (t) => {
+  const { root, service, upload, config } = await setup(t, {
+    env: {
+      KIRI_INPUT: "photo",
+      KIRI_MODEL_QUALITY: "3",
+      KIRI_TEXTURE_QUALITY: "0",
+      KIRI_TEXTURE_SMOOTHING: "0",
+      KIRI_ISMASK: "1",
+    },
+    frames: stillFrames(),
+  });
+  assert.equal(config.input.mode, "photo");
+  const { job } = await upload();
+  const submitted = await readJob(root, job.id);
+  assert.equal(submitted.input.mode, "photo");
+  assert.equal(submitted.input.kind, "mesh");
+  assert.equal(submitted.input.photos, 24);
+  assert.equal(submitted.input.fileFormat, "GLB");
+  assert.equal(submitted.input.modelQuality, 3);
+  assert.equal(submitted.input.textureQuality, 0);
+  assert.equal(submitted.input.textureSmoothing, 0);
+  assert.equal(submitted.input.mask, 1);
+  assert.match(submitted.kiri.serial, /^mock-photo-/);
+
+  await service.finalize(submitted);
+  const ready = await readJob(root, job.id);
+  assert.equal(ready.stage, "ready");
+  assert.equal(ready.artifact.format, "glb");
+  assert.equal(ready.artifact.file, "result.glb");
+  assert.ok(ready.artifact.bytes > 0);
+  assert.equal(ready.artifact.splatCount, undefined);
+  // Photo Scan is a mesh job: no splat file, no crop, nothing to convert.
+  const files = await readdir(join(root, "jobs", job.id));
+  assert.ok(files.includes("result.glb"));
+  assert.equal(files.includes("result.spz"), false);
+  assert.equal(files.includes("result.ply"), false);
+  assert.equal(ready.crop, null);
+});
+
+test("photo profile records masking off when the operator turns it off", async (t) => {
+  const { root, service, upload } = await setup(t, {
+    env: { KIRI_INPUT: "photo", KIRI_ISMASK: "0" },
+    frames: stillFrames(),
+  });
+  const { job } = await upload();
+  const submitted = await readJob(root, job.id);
+  assert.equal(submitted.input.kind, "mesh");
+  assert.equal(submitted.input.mask, 0);
+  // Masking is the difference between a chair and a room, so the flag has to be
+  // visible in the stored provenance rather than inferred later.
+  assert.equal(submitted.input.mode, "photo");
+});
+
+test("the DTO a photo job serves points the viewer at the GLB", async (t) => {
+  const { root, service, upload } = await setup(t, {
+    env: { KIRI_INPUT: "photo" },
+    frames: stillFrames(),
+  });
+  const { job } = await upload();
+  await service.finalize(await readJob(root, job.id));
+  const dto = service.dto(await readJob(root, job.id));
+  assert.equal(dto.artifact.format, "glb");
+  assert.equal(dto.artifact.url, `/api/kiri/jobs/${job.id}/result.glb`);
+  assert.equal(dto.artifact.splatCount, null);
 });
 
 // --- KIRI mesh profile -----------------------------------------------------

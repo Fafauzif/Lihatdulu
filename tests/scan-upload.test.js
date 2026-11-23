@@ -192,7 +192,7 @@ test("result details say when the model came from stills", () => {
     mock: false,
     stage: "ready",
     source: { filename: "kursi.mp4", bytes: 1024 },
-    input: { mode: "photo", photos: 101 },
+    input: { mode: "splat", photos: 101 },
     kiri: { serial: "abcdef1234567890" },
   });
   assert.equal(photo.find(([term]) => term === "Sumber")[1], "KIRI Engine · 3DGS foto, 101 still dari video");
@@ -201,10 +201,45 @@ test("result details say when the model came from stills", () => {
     source: { filename: "kursi.mp4", bytes: 1024 },
     input: { mode: "video", fallback: "kiri_unavailable", reason: "ffmpeg tidak ada di PATH" },
   });
-  assert.match(fallback.find(([term]) => term === "Sumber")[1], /mundur dari mode foto$/);
+  assert.match(fallback.find(([term]) => term === "Sumber")[1], /mundur ke unggah video$/);
   const video = detailRows({ mock: false, input: { mode: "video" } });
   assert.equal(video.find(([term]) => term === "Sumber")[1], "KIRI Engine · 3DGS video, masking otomatis");
 });
+
+test("a photo result names Photo Scan and its quality, not featureless", () => {
+  const rows = detailRows({
+    mock: false,
+    stage: "ready",
+    source: { filename: "kursi.mp4", bytes: 1024 },
+    input: { mode: "photo", photos: 101, modelQuality: 3, textureQuality: 0, mask: 1 },
+    kiri: { serial: "abcdef1234567890" },
+    artifact: { format: "glb", bytes: 2_136_020, triangles: 210_000, splatCount: null },
+  });
+  assert.equal(
+    rows.find(([term]) => term === "Sumber")[1],
+    "KIRI Engine · Photo Scan Ultra, masking otomatis, 101 foto dari video",
+  );
+  // The default modelQuality is 0, which KIRI calls High.
+  const high = detailRows({
+    mock: false,
+    input: { mode: "photo", photos: 24, modelQuality: 0 },
+    artifact: { format: "glb", bytes: 1, triangles: 1, splatCount: null },
+  });
+  assert.match(high.find(([term]) => term === "Sumber")[1], /Photo Scan High/);
+});
+
+test("a splat result still names the 3DGS stills route", () => {
+  const rows = detailRows({
+    mock: false,
+    input: { mode: "splat", photos: 101 },
+    artifact: { format: "spz", bytes: 1024, splatCount: 120_000 },
+  });
+  assert.equal(
+    rows.find(([term]) => term === "Sumber")[1],
+    "KIRI Engine · 3DGS foto, 101 still dari video",
+  );
+});
+
 
 test("a mesh result names the featureless profile and counts triangles", () => {
   const rows = detailRows({

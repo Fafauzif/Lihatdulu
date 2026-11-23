@@ -244,9 +244,14 @@ export function createKiriService({
       });
       await updateJob(jobsRoot, job.id, { stage: "converting" });
       const zip = await readFileImpl(paths.zip);
-      // The mesh profile returns a GLB and no splats: there is nothing to
-      // convert, so the validated model is written and served as-is.
-      if (job.input?.mode === "mesh") {
+      // The mesh profiles return a GLB and no splats: there is nothing to
+      // convert, so the validated model is written and served as-is. `kind` is
+      // the recorded artifact shape; older records only carry `mode`.
+      const meshArtifact =
+        job.input?.kind === "mesh" ||
+        job.input?.mode === "mesh" ||
+        job.input?.mode === "photo";
+      if (meshArtifact) {
         const { name, data } = extractModel(zip, {
           maxBytes: config.limits.maxModelBytes,
         });
@@ -395,17 +400,22 @@ export function createKiriService({
 
     const submitStarted = now();
     const jobDir = jobPaths(jobsRoot, job.id).dir;
-    // KIRI's 3DGS photo endpoint reconstructs one object from stills. A video
+    // KIRI's 3DGS image endpoint reconstructs one object from stills. A video
     // orbit of a chair reconstructs the room around it, so when the profile
-    // asks for it the clip is sampled first and the stills are sent instead.
-    const photoMode =
-      config.input?.mode === "photo" && typeof client.submitImages === "function";
+    // asks for stills the clip is sampled first and the frames are sent instead.
+    const splatMode =
+      config.input?.mode === "splat" && typeof client.submitImages === "function";
+    // Photo Scan is the route KIRI documents for an ordinary textured object and
+    // the only one with quality controls. It answers with a mesh.
+    const scanMode =
+      config.input?.mode === "photo" &&
+      typeof client.submitPhotoImages === "function";
     // The mesh profile needs stills too, but from the featureless-object
     // endpoint. A client without that method falls back to the plain video job.
     const meshMode =
       config.input?.mode === "mesh" &&
       typeof client.submitFeaturelessImages === "function";
-    const stillsMode = photoMode || meshMode;
+    const stillsMode = splatMode || scanMode || meshMode;
     const framesDir = join(jobDir, "frames");
     let stills = null;
     let input = { mode: "video" };
@@ -417,10 +427,22 @@ export function createKiriService({
           fps: config.input.fps,
           count: config.input.photos,
         });
+        const stillsKind = meshMode || scanMode ? "mesh" : "splat";
         input = {
-          mode: meshMode ? "mesh" : "photo",
+          mode: meshMode ? "mesh" : scanMode ? "photo" : "splat",
+          kind: stillsKind,
           photos: stills.length,
-          ...(meshMode ? { fileFormat: "GLB" } : {}),
+          ...(stillsKind === "mesh" ? { fileFormat: "GLB" } : {}),
+          // Record the knobs that shaped the result: a quality claim is only
+          // honest if the provenance says which settings produced it.
+          ...(scanMode
+            ? {
+                modelQuality: config.input.modelQuality,
+                textureQuality: config.input.textureQuality,
+                textureSmoothing: config.input.textureSmoothing,
+                mask: config.isMask ? 1 : 0,
+              }
+            : {}),
         };
       } catch (error) {
         // A missing ffmpeg or a clip too short for 20 stills is not a dead end:
@@ -438,7 +460,17 @@ export function createKiriService({
               fileFormat: config.input.fileFormat ?? "GLB",
               jobDir,
             })
-          : await client.submitImages({ files: stills, mask: config.isMask })
+          : scanMode
+            ? await client.submitPhotoImages({
+                files: stills,
+                mask: config.isMask,
+                modelQuality: config.input.modelQuality,
+                textureQuality: config.input.textureQuality,
+                textureSmoothing: config.input.textureSmoothing,
+                fileFormat: config.input.fileFormat ?? "GLB",
+                jobDir,
+              })
+            : await client.submitImages({ files: stills, mask: config.isMask })
         : await client.submitVideo({ filePath: tempPath, filename, jobDir });
       job = await updateJob(jobsRoot, job.id, {
         stage: "queued",

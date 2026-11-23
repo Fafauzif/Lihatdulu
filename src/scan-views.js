@@ -151,20 +151,27 @@ export function renderScanPreview() {
   </section>`;
 }
 
+// KIRI's modelQuality is a number in the API and a promise to the seller. Name
+// it, because "Photo Scan" alone does not say whether the scan was Ultra.
+const MODEL_QUALITY = { 0: "High", 1: "Medium", 2: "Low", 3: "Ultra" };
+
 // Buyer-facing facts. The serial is truncated: it identifies the KIRI task but
 // is not a credential, and there is no reason to publish the whole value.
 export function detailRows(dto) {
   // Say how the model was actually built: a photoset sampled from the clip is
   // a different promise from sending the clip itself.
+  const quality = MODEL_QUALITY[dto.input?.modelQuality] ?? MODEL_QUALITY[0];
   const source = dto.mock
     ? "Mode simulasi · dibuat lokal, bukan dari KIRI"
     : dto.input?.mode === "mesh"
       ? `KIRI Engine · mesh objek (featureless), ${dto.input.photos} foto dari video`
       : dto.input?.mode === "photo"
-        ? `KIRI Engine · 3DGS foto, ${dto.input.photos} still dari video`
-        : dto.input?.fallback
-          ? "KIRI Engine · 3DGS video, masking otomatis · mundur dari mode foto"
-          : "KIRI Engine · 3DGS video, masking otomatis";
+        ? `KIRI Engine · Photo Scan ${quality}, masking otomatis, ${dto.input.photos} foto dari video`
+        : dto.input?.mode === "splat"
+          ? `KIRI Engine · 3DGS foto, ${dto.input.photos} still dari video`
+          : dto.input?.fallback
+            ? "KIRI Engine · 3DGS video, masking otomatis · mundur ke unggah video"
+            : "KIRI Engine · 3DGS video, masking otomatis";
   const rows = [
     ["Sumber", source],
     [

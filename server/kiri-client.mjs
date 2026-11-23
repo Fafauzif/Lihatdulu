@@ -137,12 +137,6 @@ export function createKiriClient({
         // timeout here or a normal phone clip is aborted mid-upload.
         timeoutMs: uploadTimeoutMs,
       });
-      if (process.env.KIRI_DEBUG === "1")
-        console.error(
-          "submit-response",
-          JSON.stringify(Object.keys(payload ?? {})),
-          JSON.stringify(payload?.data && typeof payload.data === "object" ? Object.keys(payload.data) : typeof payload?.data),
-        );
       const serial = payload?.data?.serialize;
       if (typeof serial !== "string" || !SERIAL.test(serial))
         throw new KiriError("kiri_unavailable", {
@@ -175,12 +169,49 @@ export function createKiriClient({
         body: form,
         timeoutMs: uploadTimeoutMs,
       });
-      if (process.env.KIRI_DEBUG === "1")
-        console.error(
-          "submit-images-response",
-          JSON.stringify(Object.keys(payload ?? {})),
-          JSON.stringify(payload?.data && typeof payload.data === "object" ? Object.keys(payload.data) : typeof payload?.data),
+      const serial = payload?.data?.serialize;
+      if (typeof serial !== "string" || !SERIAL.test(serial))
+        throw new KiriError("kiri_unavailable", {
+          detail: "Respons unggah foto tanpa serial.",
+        });
+      return {
+        serial,
+        calculateType: Number(payload?.data?.calculateType ?? 0) || null,
+      };
+    },
+
+    // Photo Scan: KIRI's photogrammetry route for an ordinary textured object,
+    // and the only route that exposes quality controls. Docs:
+    // POST /v1/open/photo/image, multipart `imagesFiles` (20–300) plus
+    // modelQuality (0 High … 3 Ultra), textureQuality (0 4K … 3 8K),
+    // isMask, textureSmoothing and fileFormat.
+    async submitPhotoImages({
+      files = [],
+      mask = isMask,
+      modelQuality = 0,
+      textureQuality = 0,
+      textureSmoothing = 0,
+      fileFormat = "GLB",
+    } = {}) {
+      if (!Array.isArray(files) || files.length === 0)
+        throw new KiriError("kiri_unavailable", { detail: "Foto kosong." });
+      const form = new FormData();
+      form.append("modelQuality", String(modelQuality));
+      form.append("textureQuality", String(textureQuality));
+      form.append("textureSmoothing", String(Number(textureSmoothing) ? 1 : 0));
+      form.append("isMask", String(Number(mask) ? 1 : 0));
+      form.append("fileFormat", fileFormat);
+      for (const file of files)
+        form.append(
+          "imagesFiles",
+          await videoBlob(file.path),
+          file.filename ?? "frame.jpg",
         );
+      const payload = await request("/v1/open/photo/image", {
+        method: "POST",
+        body: form,
+        timeoutMs: uploadTimeoutMs,
+      });
       const serial = payload?.data?.serialize;
       if (typeof serial !== "string" || !SERIAL.test(serial))
         throw new KiriError("kiri_unavailable", {
@@ -211,11 +242,6 @@ export function createKiriClient({
         body: form,
         timeoutMs: uploadTimeoutMs,
       });
-      if (process.env.KIRI_DEBUG === "1")
-        console.error(
-          "submit-featureless-response",
-          JSON.stringify(Object.keys(payload ?? {})),
-        );
       const serial = payload?.data?.serialize;
       if (typeof serial !== "string" || !SERIAL.test(serial))
         throw new KiriError("kiri_unavailable", {

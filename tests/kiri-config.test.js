@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   DEFAULTS,
+  artifactKind,
   loadDotEnv,
   parseDotEnv,
   publicConfig,
@@ -28,17 +29,15 @@ test("parseDotEnv reads plain, quoted and exported values", () => {
   assert.equal(values.KIRI_JOBS_ROOT, "var/kiri");
 });
 
-test("KIRI_INPUT selects the mesh profile and unknown values stay on video", () => {
+test("KIRI_INPUT selects the stills profiles and unknown values stay on video", () => {
   const base = { KIRI_API_KEY: "kiri-test-key" };
   assert.equal(readKiriConfig(base, process.cwd()).input.mode, "video");
-  assert.equal(
-    readKiriConfig({ ...base, KIRI_INPUT: "mesh" }, process.cwd()).input.mode,
-    "mesh",
-  );
-  assert.equal(
-    readKiriConfig({ ...base, KIRI_INPUT: "photo" }, process.cwd()).input.mode,
-    "photo",
-  );
+  for (const mode of ["splat", "photo", "mesh"]) {
+    assert.equal(
+      readKiriConfig({ ...base, KIRI_INPUT: mode }, process.cwd()).input.mode,
+      mode,
+    );
+  }
   // A typo must never silently pick a paid profile.
   assert.equal(
     readKiriConfig({ ...base, KIRI_INPUT: "glb" }, process.cwd()).input.mode,
@@ -48,6 +47,45 @@ test("KIRI_INPUT selects the mesh profile and unknown values stay on video", () 
     readKiriConfig({ ...base, KIRI_INPUT: "mesh" }, process.cwd()).input.fileFormat,
     "GLB",
   );
+});
+
+test("the artifact kind follows the route, not the quality settings", () => {
+  const base = { KIRI_API_KEY: "kiri-test-key" };
+  const configured = (mode) =>
+    readKiriConfig({ ...base, KIRI_INPUT: mode }, process.cwd());
+  assert.equal(artifactKind(configured("video").input.mode), "splat");
+  assert.equal(artifactKind(configured("splat").input.mode), "splat");
+  // Photo Scan answers with a mesh, so the viewer must not wait for an SPZ.
+  assert.equal(artifactKind(configured("photo").input.mode), "mesh");
+  assert.equal(artifactKind(configured("mesh").input.mode), "mesh");
+  assert.equal(publicConfig(configured("photo")).artifactKind, "mesh");
+  assert.equal(publicConfig(configured("video")).artifactKind, "splat");
+});
+
+test("Photo Scan quality knobs default to KIRI's documented values", () => {
+  const base = { KIRI_API_KEY: "kiri-test-key" };
+  const input = (env = {}) => readKiriConfig({ ...base, ...env }, process.cwd()).input;
+  const defaults = input();
+  // 0 is "best" for modelQuality (0 High … 3 Ultra) and "4K" for textureQuality.
+  assert.equal(defaults.modelQuality, 0);
+  assert.equal(defaults.textureQuality, 0);
+  // The docs recommend texture smoothing off for precise professional scans.
+  assert.equal(defaults.textureSmoothing, 0);
+
+  const ultra = input({
+    KIRI_MODEL_QUALITY: "3",
+    KIRI_TEXTURE_QUALITY: "3",
+    KIRI_TEXTURE_SMOOTHING: "1",
+  });
+  assert.equal(ultra.modelQuality, 3);
+  assert.equal(ultra.textureQuality, 3);
+  assert.equal(ultra.textureSmoothing, 1);
+
+  // Out-of-range and non-integer values fall back instead of reaching KIRI.
+  assert.equal(input({ KIRI_MODEL_QUALITY: "9" }).modelQuality, 0);
+  assert.equal(input({ KIRI_MODEL_QUALITY: "-1" }).modelQuality, 0);
+  assert.equal(input({ KIRI_TEXTURE_QUALITY: "2.5" }).textureQuality, 0);
+  assert.equal(input({ KIRI_TEXTURE_QUALITY: "8k" }).textureQuality, 0);
 });
 
 test("the mesh artifact has its own size ceiling", () => {

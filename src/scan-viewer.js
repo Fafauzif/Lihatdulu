@@ -15,11 +15,18 @@ import {
 // generous lighting, because a reconstructed shell has no environment light of
 // its own and its materials are single-sided.
 
-// Where the default camera stands for a mesh. A KIRI mesh is usually the whole
-// room, so the front of the bounding box can be a blank wall; a three-quarter
-// angle shows the subject instead.
-const MESH_AZIMUTH = 35;
-const MESH_ELEVATION = 12;
+// Where the default camera stands for a mesh. KIRI's Photo Scan crops the
+// subject itself, so the mesh is the chair rather than the room; the
+// three-quarter angle just shows the front, the arms and the base at once.
+const MESH_AZIMUTH = 32;
+const MESH_ELEVATION = 10;
+// A little air around the box: a full-box fit presses the castors against the
+// canvas edge on a narrow phone.
+const MESH_FIT = 0.9;
+// Photogrammetry shells come back underexposed under plain analytic lights, so
+// the mesh path gets a real environment and a filmic curve. The splat path is
+// untouched: Spark shades its own gaussians.
+const MESH_EXPOSURE = 1.08;
 
 export function mountScanViewer(
   root,
@@ -69,10 +76,10 @@ export function mountScanViewer(
     if (!orbit || framed) return;
     const vertical = THREE.MathUtils.degToRad(camera.fov);
     const horizontal = 2 * Math.atan(Math.tan(vertical / 2) * camera.aspect);
-    // A KIRI mesh is the room, not the chair: the box fit leaves the subject
-    // small, so the opening pose sits closer than a full-box fit.
+    // A KIRI mesh is the subject, not the room, but the box fit still leaves a
+    // margin so the base is not cropped on a short viewport.
     const distance =
-      (fitRadius / Math.sin(Math.min(vertical, horizontal) / 2)) * 0.82;
+      (fitRadius / Math.sin(Math.min(vertical, horizontal) / 2)) * MESH_FIT;
     const phi = THREE.MathUtils.degToRad(90 - MESH_ELEVATION);
     const theta = THREE.MathUtils.degToRad(MESH_AZIMUTH);
     camera.position.set(
@@ -163,18 +170,35 @@ export function mountScanViewer(
   }
 
   async function mountModel() {
-    const [{ GLTFLoader }, { OrbitControls }] = await Promise.all([
-      import("three/addons/loaders/GLTFLoader.js"),
-      import("three/addons/controls/OrbitControls.js"),
-    ]);
+    const [{ GLTFLoader }, { OrbitControls }, { RoomEnvironment }] =
+      await Promise.all([
+        import("three/addons/loaders/GLTFLoader.js"),
+        import("three/addons/controls/OrbitControls.js"),
+        import("three/addons/environments/RoomEnvironment.js"),
+      ]);
     if (disposed) return;
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 2.4));
-    const key = new THREE.DirectionalLight(0xffffff, 2.2);
-    key.position.set(3, 6, 4);
+
+    // Filmic response plus an image-based environment. Analytic lights alone
+    // leave a photogrammetry shell flat: its texture already carries baked
+    // shadow, so the extra term has to come from the surroundings, not a
+    // brighter lamp.
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = MESH_EXPOSURE;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+    scene.environment = environment;
+    scene.environmentIntensity = 1.0;
+
+    // A soft key from above-left and a cool rim keep the silhouette readable
+    // against the stage colour without washing the fabric out.
+    const key = new THREE.DirectionalLight(0xfff6ec, 1.35);
+    key.position.set(2.6, 4.2, 3.2);
     scene.add(key);
-    const fill = new THREE.DirectionalLight(0xffe6cc, 1.1);
-    fill.position.set(-5, 3, -3);
-    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xd7e4ff, 0.85);
+    rim.position.set(-3.4, 2.2, -2.6);
+    scene.add(rim);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x333a35, 0.35));
 
     new GLTFLoader().load(
       url,
@@ -315,6 +339,9 @@ export function mountScanViewer(
     } catch {}
     try {
       spark?.dispose();
+    } catch {}
+    try {
+      scene?.environment?.dispose?.();
     } catch {}
     try {
       renderer?.dispose();
