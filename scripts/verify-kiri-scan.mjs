@@ -310,12 +310,19 @@ async function layoutFacts(page) {
     await open(page, "/jual/pindai");
     await page.locator("[data-scan-upload]").waitFor();
     const heading = await page.locator("[data-scan-upload] h1").textContent();
-    assert.match(heading, /Ubah video barangmu/);
+    assert.match(heading, /Pindai furniturmu/);
     const mode = await page.locator("[data-scan-mode]").textContent();
     assert.match(mode, /Mode simulasi/);
     assert.match(mode, /tidak ada kredit/);
     assert.equal(await page.locator("[data-scan-submit]").isDisabled(), true);
     assert.equal(await page.locator("[data-scan-consent]").isChecked(), false);
+    // The release entry point is the camera; an existing file is the fallback.
+    assert.equal(await page.locator("[data-scan-open-camera]").isVisible(), true);
+    assert.equal(await page.locator("[data-scan-choose]").isVisible(), true);
+    assert.equal(
+      await page.locator('[data-scan-upload] a[href="/pindai/demo-chair"]').first().isVisible(),
+      true,
+    );
     await shot(page, "01-upload-empty");
     return { heading: heading.trim(), mode: mode.trim() };
   });

@@ -174,3 +174,44 @@
     grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   }
 }
+
+/* Why the page opened on photos: one sentence, placed under the facts so it
+   reads before the viewer, not as fine print. */
+.scan-open-reason {
+  margin: 10px 0 0;
+  max-width: 64ch;
+  padding: 10px 12px;
+  border-left: 3px solid var(--ld-green);
+  border-radius: 4px;
+  background: var(--ld-green-tint);
+  color: var(--ld-ink-soft);
+  font-size: var(--ld-text-sm);
+  line-height: 1.55;
+}
+
+.scan-open-reason[hidden] {
+  display: none;
+}
+
+.scan-photos-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.scan-photos-head h2 {
+  margin: 0;
+}
+
+.scan-photos-head .scan-link-button {
+  min-height: 44px;
+}
+
+@media (max-width: 560px) {
+  .scan-photos-head .scan-link-button {
+    width: 100%;
+  }
+}

@@ -2,6 +2,7 @@
 // can pin the Indonesian copy and the required controls without a DOM.
 
 import { icon } from "./components.js";
+import { GUIDANCE } from "./scan-recorder.js";
 import {
   DEFAULT_LIMITS,
   PREVIEW_COPY,
@@ -48,24 +49,52 @@ export function renderScanUpload() {
   <section class="scan-upload" data-scan-upload>
     <header class="scan-upload-head">
       <p class="scan-eyebrow">Pindai furnitur · KIRI Engine</p>
-      <h1>${UPLOAD_COPY.title}</h1>
-      <p class="scan-lede">${UPLOAD_COPY.lede}</p>
+      <h1>Pindai furniturmu.</h1>
+      <p class="scan-lede">Rekam satu putaran pelan, atau pilih video yang sudah ada. Video dikirim ke KIRI Engine dan kembali sebagai model 3D yang bisa diputar pembeli.</p>
       <p class="scan-mode" data-scan-mode hidden></p>
+      <p class="scan-example-link">${icon("cube")}<a href="/pindai/demo-chair" data-nav>Lihat contoh hasil dari kursi asli</a><span>· tanpa kredit, tanpa unggah</span></p>
     </header>
 
     <div class="scan-upload-grid">
       <section class="scan-panel" data-scan-picker>
         <div class="scan-panel-head">
           <span class="scan-stepnum" aria-hidden="true">1</span>
-          <h2>Pilih video MP4</h2>
+          <h2>Ambil video</h2>
         </div>
-        <p class="scan-panel-note">Satu video untuk satu barang. Rekam 30–60 detik sambil berjalan mengelilingi barang.</p>
-        <p class="scan-tips-head">Supaya hasilnya bersih</p>
-        <ul class="scan-tips" data-scan-tips>${CAPTURE_TIPS.map((tip) => `<li>${tip}</li>`).join("")}</ul>
-        <input class="scan-file-input" data-scan-input type="file" accept="video/mp4" hidden>
+        <p class="scan-panel-note">Satu video untuk satu barang. Rekam 15–45 detik sambil berjalan mengelilingi barang.</p>
+
+        <div class="scan-source-actions">
+          <button type="button" class="scan-source primary" data-scan-open-camera>${icon("camera")} Rekam dengan kamera</button>
+          <button type="button" class="scan-source" data-scan-choose>${icon("film")} ${UPLOAD_COPY.pick}</button>
+        </div>
+        <p class="scan-source-note">Di ponsel, tombol rekam langsung memakai kamera belakang. Tidak ada yang diunggah sampai kamu menyetujui di langkah 2.</p>
+
+        <div class="scan-recorder" data-scan-recorder hidden data-stage="idle">
+          <div class="scan-recorder-stage">
+            <video class="scan-recorder-video" data-rec-video playsinline muted autoplay></video>
+            <video class="scan-recorder-video" data-rec-review playsinline controls hidden></video>
+            <p class="scan-recorder-empty" data-rec-empty>Kamera belum menyala.</p>
+            <div class="scan-recorder-hud">
+              <span class="scan-recorder-timer" data-rec-timer>0:00</span>
+              <span class="scan-recorder-dot" data-rec-dot hidden><i aria-hidden="true"></i>Merekam</span>
+            </div>
+            <p class="scan-recorder-guide" data-rec-guide aria-live="polite">${GUIDANCE[0]}</p>
+          </div>
+          <div class="scan-recorder-actions">
+            <button type="button" class="scan-link-button primary" data-rec-start hidden>Mulai merekam</button>
+            <button type="button" class="scan-link-button" data-rec-stop hidden>Hentikan</button>
+            <button type="button" class="scan-link-button primary" data-rec-use hidden>Gunakan rekaman</button>
+            <button type="button" class="scan-link-button" data-rec-retake hidden>Rekam ulang</button>
+            <button type="button" class="scan-link-button" data-rec-native>Rekam lewat aplikasi kamera</button>
+            <button type="button" class="scan-link-button" data-rec-close>Batal</button>
+          </div>
+          <input type="file" accept="video/*" capture="environment" data-rec-native-input hidden>
+          <p class="scan-recorder-status" data-rec-status role="status" aria-live="polite"></p>
+        </div>
+
+        <input class="scan-file-input" data-scan-input type="file" accept="video/mp4,video/webm,video/quicktime" hidden>
         <div class="scan-drop" data-scan-drop>
-          <button type="button" class="scan-choose" data-scan-choose>${icon("film")} ${UPLOAD_COPY.pick}</button>
-          <p>atau seret berkas MP4 ke sini</p>
+          <p>atau seret berkas video ke sini · MP4, WebM, atau MOV sampai ${limitMb}</p>
         </div>
         <figure class="scan-media" data-scan-media hidden>
           <video data-scan-video controls playsinline muted preload="metadata"></video>
@@ -73,6 +102,11 @@ export function renderScanUpload() {
         </figure>
         <p class="scan-field-error" data-scan-file-error role="alert" hidden></p>
         <button type="button" class="scan-link-button" data-scan-change hidden>${UPLOAD_COPY.change}</button>
+
+        <details class="scan-tips-block">
+          <summary>Supaya hasilnya bersih</summary>
+          <ul class="scan-tips" data-scan-tips>${CAPTURE_TIPS.map((tip) => `<li>${tip}</li>`).join("")}</ul>
+        </details>
       </section>
 
       <section class="scan-panel" data-scan-confirm>
@@ -83,7 +117,7 @@ export function renderScanUpload() {
         <ul class="scan-facts">
           <li><strong>Diproses di cloud.</strong> ${UPLOAD_COPY.cloudNote}</li>
           <li><strong>Butuh kredit.</strong> Setiap kiriman memakai kredit KIRI milik operator demo.</li>
-          <li><strong>Batas KIRI.</strong> MP4 sampai ${limitMb}, ${DEFAULT_LIMITS.maxDurationS / 60} menit, maksimal 1920×1080.</li>
+          <li><strong>Batas KIRI.</strong> Video sampai ${limitMb}, ${DEFAULT_LIMITS.maxDurationS / 60} menit, maksimal 1920×1080.</li>
           <li><strong>Penyimpanan.</strong> ${UPLOAD_COPY.privacyNote}</li>
         </ul>
         <label class="scan-consent">
@@ -117,6 +151,11 @@ export function renderScanUpload() {
         <button type="button" class="scan-link-button" data-scan-new hidden>${UPLOAD_COPY.another}</button>
       </div>
       <p class="scan-panel-note" data-scan-job-note hidden></p>
+      <div class="scan-wait-links" data-scan-wait hidden>
+        <p>Sambil menunggu, kamu bisa membuka hasil yang sudah tersimpan:</p>
+        <a href="/pindai/demo-chair" data-nav>${icon("cube")} Contoh hasil pindai · kursi asli</a>
+        <a href="/barang/sora?tab=model" data-nav>${icon("cube")} Lemari Sora dalam 3D</a>
+      </div>
     </section>
   </section>`;
 }
@@ -129,6 +168,7 @@ export function renderScanPreview() {
       <h1 data-scan-title>Hasil pindai</h1>
       <p class="scan-preview-facts" data-scan-facts>Menyiapkan model 3D…</p>
       <p class="scan-preview-disclaimer" data-scan-provider></p>
+      <p class="scan-open-reason" data-scan-open-reason hidden></p>
     </header>
     <div class="scan-preview-grid">
       <div class="scan-preview-main">
@@ -140,8 +180,13 @@ export function renderScanPreview() {
         <p class="scan-viewer-caveat" data-scan-caveat>${PREVIEW_COPY.caveat}</p>
         <p class="scan-refine-note" data-scan-refine-note hidden></p>
         <section class="scan-photos" data-scan-photos hidden>
-          <h2>${PREVIEW_COPY.photosHeading}</h2>
-          <p class="scan-photos-note">${PREVIEW_COPY.photosNote}</p>
+          <div class="scan-photos-head">
+            <div>
+              <h2>${PREVIEW_COPY.photosHeading}</h2>
+              <p class="scan-photos-note">${PREVIEW_COPY.photosNote}</p>
+            </div>
+            <button type="button" class="scan-link-button primary" data-scan-open-model hidden>${PREVIEW_COPY.openModel}</button>
+          </div>
           <ul class="scan-photo-grid" data-scan-photo-grid></ul>
         </section>
       </div>
@@ -170,6 +215,31 @@ export function renderScanPreview() {
       </aside>
     </div>
   </section>`;
+}
+
+// A scan that still sees through a tenth of its own silhouette is not a good
+// first impression, and the photos are the honest evidence. This is the one
+// rule that reorders the result page; it is a presentation choice, not a
+// measurement, and it never hides the 3D view.
+export const POOR_COVERAGE_SHARE = 0.1;
+
+export function preferredSource(dto) {
+  const options = sourceOptions(dto);
+  const ids = options.map((option) => option.id);
+  const photosFirst = Boolean(dto?.photos?.length) && hasPoorCoverage(dto);
+  if (photosFirst && ids.includes("photos")) return "photos";
+  if (ids.includes("refined")) return "refined";
+  if (ids.includes("raw")) return "raw";
+  return ids[0] ?? null;
+}
+
+export function hasPoorCoverage(dto) {
+  // The coverage block is reported under refine.metrics on a job record and
+  // under refine.coverage in the summary; accept both rather than silently
+  // losing the rule on one page.
+  const coverage = dto?.refine?.coverage ?? dto?.refine?.metrics?.coverage;
+  const share = Number(coverage?.holeRatioAfter);
+  return coverage?.verdict === "berlubang" && Number.isFinite(share) && share >= POOR_COVERAGE_SHARE;
 }
 
 // Which previews a buyer may open, best first. Pure so the tabs, the tests and
@@ -210,6 +280,10 @@ export function sourceOptions(dto) {
       format: null,
       caveat: PREVIEW_COPY.photosCaveat,
     });
+  // When photos win the first impression, they also come first in the tab
+  // order: a buyer should not have to hunt for the view the page opened on.
+  const preferred = hasPoorCoverage(dto) && dto.photos?.length ? "photos" : null;
+  if (preferred) options.sort((a, b) => (a.id === preferred ? -1 : b.id === preferred ? 1 : 0));
   return options;
 }
 
@@ -298,6 +372,14 @@ export function detailRows(dto) {
       photoset ? "Berkas foto" : "Berkas video",
       [dto.source?.filename, formatBytes(dto.source?.bytes)].filter(Boolean).join(" · "),
     ],
+    ...(dto.source?.transcodedFrom
+      ? [
+          [
+            "Format rekaman",
+            `${String(dto.source.transcodedFrom).toUpperCase()} dari ponsel, dikonversi ke MP4 di server`,
+          ],
+        ]
+      : []),
     ...dimensionRows(dto.source?.dimensions),
   ];
   if (dto.kiri?.serial)

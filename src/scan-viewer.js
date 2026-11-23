@@ -36,6 +36,7 @@ export function mountScanViewer(
     ? root
     : root.querySelector("[data-scan-viewer]");
   if (!host || !url) return () => {};
+  host.dataset.format = format;
   const placeholder = host.querySelector("[data-scan-viewer-placeholder]");
   const posterNode = host.querySelector("[data-scan-poster]");
   const canvas = document.createElement("canvas");

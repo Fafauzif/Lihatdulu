@@ -1,5 +1,10 @@
 # Continue LihatDulu in DeepSeek Harness
 
+> **Competition release (2026-11-23):** the integration branch is
+> `release/competition-judge`. Read [kiri-release.md](kiri-release.md) first for
+> what shipped, what was verified and the two remaining gates (an HTTPS scan
+> host and one physical-phone run). The judge walkthrough is in the root README.
+
 **Baseline** `main` at `1d70d75ccc29fbb6f62ef54e60e309e1ef6e0610` · [Fafauzif/LihatDulu-demo](https://github.com/Fafauzif/LihatDulu-demo) · app version 8.0.0.
 
 Extract this full-project archive into an empty folder, then open that folder as your new repository. `package.json` is at the root. The Git commit above identifies the upstream source snapshot. Your fresh repository will have its own commit history. Start a fresh DeepSeek Harness session from the repo root so it discovers `.dsh/skills/`. See [the package manifest](overwrite-manifest.md) for the contents.

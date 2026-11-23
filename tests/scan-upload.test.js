@@ -54,8 +54,16 @@ test("a portrait phone clip is the same Full HD budget and is accepted", () => {
   assert.deepEqual(result, { ok: true, code: null, message: "" });
 });
 
-test("non-MP4 files are refused before upload", () => {
-  const result = validateVideoFile({ name: "kursi.mov", type: "video/quicktime", size: 10, durationS: 5 });
+test("phones' own formats are accepted; a non-video is refused", () => {
+  // Android Chromium records WebM and iOS can hand back MOV. The server
+  // converts both, so refusing them in the browser would block real phones.
+  for (const file of [
+    { name: "kursi.webm", type: "video/webm", size: 10, durationS: 5 },
+    { name: "kursi.mov", type: "video/quicktime", size: 10, durationS: 5 },
+    { name: "kursi.mp4", type: "video/mp4", size: 10, durationS: 5 },
+  ])
+    assert.equal(validateVideoFile(file).ok, true, file.name);
+  const result = validateVideoFile({ name: "kursi.pdf", type: "application/pdf", size: 10, durationS: 5 });
   assert.equal(result.ok, false);
   assert.equal(result.code, "video_not_mp4");
 });
@@ -85,7 +93,11 @@ test("the pre-metadata check accepts a plausible MP4 without a duration", () => 
     validateVideoBasics({ name: "kursi.mp4", type: "video/mp4", size: 1024 }, DEFAULT_LIMITS),
     { ok: true, code: null, message: "" },
   );
-  assert.equal(validateVideoBasics({ name: "kursi.mov", type: "video/quicktime", size: 1024 }).code, "video_not_mp4");
+  assert.deepEqual(
+    validateVideoBasics({ name: "kursi.webm", type: "video/webm", size: 1024 }),
+    { ok: true, code: null, message: "" },
+  );
+  assert.equal(validateVideoBasics({ name: "kursi.txt", type: "text/plain", size: 1024 }).code, "video_not_mp4");
   assert.equal(validateVideoBasics({ name: "kursi.mp4", size: 0 }).code, "upload_empty");
   assert.equal(
     validateVideoBasics({ name: "kursi.mp4", size: DEFAULT_LIMITS.maxUploadBytes + 1 }).code,
@@ -96,6 +108,22 @@ test("the pre-metadata check accepts a plausible MP4 without a duration", () => 
 test("a clip whose metadata cannot be read is refused", () => {
   assert.equal(validateVideoFile({ name: "a.mp4", size: 10, durationS: 0 }).code, "video_unreadable");
   assert.equal(validateVideoFile({ name: "a.mp4", size: 0, durationS: 5 }).code, "upload_empty");
+});
+
+// Android's MediaRecorder emits a streamed WebM with no duration header, so the
+// browser cannot report a length even though the clip is fine.
+test("a clip with an unknown duration is accepted and left to the server", () => {
+  const result = validateVideoFile({
+    name: "rekaman.webm",
+    type: "video/webm",
+    size: 1024,
+    durationS: null,
+    width: 1920,
+    height: 1080,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(formatDuration(null), "—");
+  assert.equal(formatDuration(Number.POSITIVE_INFINITY), "—");
 });
 
 test("three minutes plus container rounding is still accepted", () => {
@@ -148,15 +176,22 @@ test("the stored job id is scoped, validated and removable", () => {
   assert.equal(readStoredJobId(null), null);
 });
 
-test("the upload page asks for consent and never mentions a camera", () => {
+test("the upload page offers the camera first and still requires consent", () => {
   const html = renderScanUpload();
   assert.match(html, /Saya setuju video ini dikirim ke KIRI Engine/);
-  assert.match(html, /data-scan-input[^>]*accept="video\/mp4"/);
+  assert.match(html, /data-scan-input[^>]*accept="video\/mp4,video\/webm,video\/quicktime"/);
   assert.match(html, /data-scan-consent/);
   assert.match(html, /data-scan-submit[^>]*disabled/);
   assert.match(html, /KIRI Engine/);
-  assert.doesNotMatch(html, /getUserMedia|kamera belakang|Rekam video/i);
   assert.match(html, /data-scan-mode/);
+  // The camera is the primary action, the file picker the alternative, and the
+  // native-camera fallback exists for browsers that cannot record in-page.
+  assert.match(html, /data-scan-open-camera[^>]*>[^<]*<svg[\s\S]*?Rekam dengan kamera/);
+  assert.match(html, /data-scan-choose[\s\S]*?Pilih video/);
+  assert.match(html, /capture="environment"[^>]*data-rec-native-input/);
+  assert.match(html, /data-rec-native[^>]*>Rekam lewat aplikasi kamera/);
+  // Nothing is uploaded before the seller ticks the box.
+  assert.match(html, /Tidak ada yang diunggah sampai kamu menyetujui/);
 });
 
 test("the upload page carries the measured capture guidance", () => {

@@ -11,6 +11,18 @@ const DEFINITIONS = {
     status: 415,
     copy: "Berkas ini bukan MP4. Pilih video MP4 dari galeri.",
   },
+  video_too_long: {
+    status: 413,
+    copy: "Video lebih dari 3 menit. Potong dulu menjadi satu putaran barang.",
+  },
+  video_needs_converter: {
+    status: 415,
+    copy: "Rekaman ini berformat WebM dan server belum bisa mengonversinya. Rekam lewat aplikasi kamera atau pilih berkas MP4.",
+  },
+  video_convert_failed: {
+    status: 500,
+    copy: "Konversi rekaman ke MP4 gagal di server. Coba rekam lagi, atau pilih berkas MP4.",
+  },
   upload_empty: { status: 400, copy: "Berkas video kosong. Pilih video lain." },
   photos_too_few: {
     status: 400,

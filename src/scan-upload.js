@@ -19,12 +19,42 @@ import {
   validateVideoFile,
 } from "./scan-api.js";
 import { STAGE_HEADING } from "./scan-views.js";
+import { mountScanRecorder } from "./scan-camera.js";
 
 export { renderScanUpload } from "./scan-views.js";
 
 // Upload-only seller flow. The browser never calls KIRI directly: it hands one
 // MP4 to our server, which owns the key and the job record. Every state below
 // mirrors a server stage so a reload can pick the same job back up.
+
+// Android's MediaRecorder writes a streamed WebM with no duration in the
+// header, so Chrome reports `Infinity` until the file is seeked to its end.
+// The clip is perfectly usable — the server's converter knows its real length —
+// so recover the duration when we can and otherwise report "unknown" instead of
+// calling a good recording unreadable.
+function recoverDuration(probe) {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      probe.removeEventListener("durationchange", onDuration);
+      resolve(null);
+    };
+    const onDuration = () => {
+      if (Number.isFinite(probe.duration) && probe.duration > 0) {
+        clearTimeout(timer);
+        probe.removeEventListener("durationchange", onDuration);
+        resolve(probe.duration);
+      }
+    };
+    const timer = setTimeout(done, 1200);
+    probe.addEventListener("durationchange", onDuration);
+    try {
+      probe.currentTime = 1e101;
+    } catch {
+      done();
+    }
+  });
+}
 
 function readVideoMetadata(url) {
   return new Promise((resolve, reject) => {
@@ -42,9 +72,13 @@ function readVideoMetadata(url) {
     }, 5000);
     probe.addEventListener(
       "loadedmetadata",
-      () => {
+      async () => {
+        let duration = Number(probe.duration);
+        if (!Number.isFinite(duration) || duration <= 0) {
+          duration = await recoverDuration(probe);
+        }
         const result = {
-          durationS: Number(probe.duration),
+          durationS: duration,
           width: probe.videoWidth,
           height: probe.videoHeight,
         };
@@ -84,6 +118,9 @@ export function mountScanUpload(root, { onNavigate = () => {}, onToast = () => {
   const input = q("[data-scan-input]");
   const drop = q("[data-scan-drop]");
   const choose = q("[data-scan-choose]");
+  const openCamera = q("[data-scan-open-camera]");
+  const recorderHost = q("[data-scan-recorder]");
+  const waitLinks = q("[data-scan-wait]");
   const change = q("[data-scan-change]");
   const media = q("[data-scan-media]");
   const video = q("[data-scan-video]");
@@ -121,6 +158,16 @@ export function mountScanUpload(root, { onNavigate = () => {}, onToast = () => {
     pollAttempt: 0,
     disposed: false,
   };
+
+  // The recorder hands back a File and nothing else: from here on this is the
+  // same validate → consent → upload path as choosing an existing clip.
+  const recorder = mountScanRecorder(recorderHost, {
+    onClip: ({ file }) => {
+      recorder?.close();
+      void acceptFile(file);
+      confirm.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    },
+  });
 
   function showMode(config) {
     state.config = config;
@@ -262,6 +309,7 @@ export function mountScanUpload(root, { onNavigate = () => {}, onToast = () => {
 
   function showJob(job) {
     state.job = job;
+    recorder?.close();
     jobPanel.hidden = false;
     host.dataset.hasJob = "1";
     picker.hidden = true;
@@ -288,6 +336,11 @@ export function mountScanUpload(root, { onNavigate = () => {}, onToast = () => {
     openLink.hidden = false;
     openLink.href = `/pindai/${job.id}`;
     openLink.textContent = job.stage === "ready" ? UPLOAD_COPY.openResult : "Buka halaman proses";
+    // Something useful to do while KIRI works, and a way back: the saved chair
+    // and the Sora walkthrough both open without spending a credit.
+    waitLinks.hidden = !(
+      job.stage !== "ready" && !["failed", "expired"].includes(job.stage)
+    );
 
     if (job.stage === "uploading") {
       setProgress({ percent: state.uploadPercent ?? 0 });
@@ -350,6 +403,8 @@ export function mountScanUpload(root, { onNavigate = () => {}, onToast = () => {
 
   function resetToPicker() {
     clearPoll();
+    recorder?.close();
+    waitLinks.hidden = true;
     storeJobId(localStore(), null);
     state.job = null;
     state.busy = false;
@@ -479,6 +534,14 @@ export function mountScanUpload(root, { onNavigate = () => {}, onToast = () => {
     }
   }
 
+  openCamera.addEventListener(
+    "click",
+    () => {
+      recorder.open();
+      recorderHost.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    },
+    { signal },
+  );
   choose.addEventListener("click", () => input.click(), { signal });
   change.addEventListener("click", () => input.click(), { signal });
   input.addEventListener(
@@ -564,6 +627,7 @@ export function mountScanUpload(root, { onNavigate = () => {}, onToast = () => {
   return () => {
     state.disposed = true;
     clearPoll();
+    recorder?.dispose();
     controller.abort();
     if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
     host.replaceChildren();

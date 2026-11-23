@@ -87,7 +87,7 @@ async function writeRecord(jobsRoot, job) {
   await replaceFile(temporary, paths.record);
 }
 
-export function newJobRecord({ videoHash, filename, bytes, provider, dimensions = null, kind = "video" }) {
+export function newJobRecord({ videoHash, filename, bytes, provider, dimensions = null, kind = "video", transcodedFrom = null }) {
   const now = new Date().toISOString();
   return {
     schema: 1,
@@ -98,7 +98,16 @@ export function newJobRecord({ videoHash, filename, bytes, provider, dimensions 
     completedAt: null,
     stage: "uploading",
     provider,
-    source: { filename, bytes, kind, dimensions, photos: 0 },
+    source: {
+      filename,
+      bytes,
+      kind,
+      dimensions,
+      photos: 0,
+      // A WebM or QuickTime upload was converted to MP4 before KIRI saw it. The
+      // provenance says so, because it explains a different byte count.
+      ...(transcodedFrom ? { transcodedFrom } : {}),
+    },
     kiri: { serial: null, status: null, statusRaw: null },
     attempts: { submit: 0, poll: 0, finalize: 0 },
     timings: {},
@@ -256,6 +265,9 @@ export function toJobDto(job, { mock = false, now = Date.now(), ttlMs = 0 } = {}
       // ever a preview, so its dimensions are never inferred from the mesh.
       dimensions: job.source?.dimensions ?? null,
       photos: job.source?.photos ?? job.photos?.length ?? 0,
+      // The phone's own container when the server had to convert it. Not a
+      // secret, and it explains why source.bytes differs from the phone file.
+      transcodedFrom: job.source?.transcodedFrom ?? null,
     },
     // How the model was built: the clip itself or stills sampled from it.
     input: job.input ?? null,

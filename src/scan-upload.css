@@ -175,3 +175,281 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Entry hierarchy: one primary action (record), one secondary (existing file).
+   Both are large enough for a thumb at 390 px. */
+.scan-example-link {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  color: var(--ld-ink-muted);
+  font-size: var(--ld-text-sm);
+}
+
+.scan-example-link svg {
+  width: 16px;
+  height: 16px;
+  color: var(--ld-green-deep);
+}
+
+.scan-example-link a {
+  color: var(--ld-green-deep);
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.scan-source-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.scan-source {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 12px 16px;
+  border: 1px solid var(--ld-line-strong);
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-paper);
+  color: var(--ld-ink);
+  font: inherit;
+  font-size: var(--ld-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.scan-source svg {
+  width: 18px;
+  height: 18px;
+}
+
+.scan-source.primary {
+  border-color: transparent;
+  background: var(--ld-green);
+  color: #fff;
+}
+
+.scan-source.primary:hover {
+  background: var(--ld-green-deep);
+}
+
+.scan-source:hover:not(.primary) {
+  border-color: var(--ld-green);
+  color: var(--ld-green-deep);
+}
+
+.scan-source-note {
+  margin: 8px 0 0;
+  color: var(--ld-ink-muted);
+  font-size: var(--ld-text-xs);
+  line-height: 1.5;
+}
+
+/* Recorder: the stage keeps 4:3 so a phone in portrait still shows the object
+   and the guidance line without scrolling. */
+.scan-recorder {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--ld-green-line);
+  border-radius: var(--ld-radius-lg);
+  background: var(--ld-surface);
+}
+
+.scan-recorder[hidden] {
+  display: none;
+}
+
+.scan-recorder-stage {
+  position: relative;
+  border-radius: var(--ld-radius-sm);
+  overflow: hidden;
+  background: #0f1512;
+  aspect-ratio: 4 / 3;
+}
+
+.scan-recorder-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #0f1512;
+}
+
+.scan-recorder-video[hidden],
+.scan-recorder-empty[hidden],
+.scan-recorder-dot[hidden],
+.scan-recorder-actions button[hidden] {
+  display: none;
+}
+
+.scan-recorder-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: #d7e3da;
+  font-size: var(--ld-text-sm);
+}
+
+.scan-recorder-hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.scan-recorder-timer {
+  padding: 3px 9px;
+  border-radius: var(--ld-radius-pill);
+  background: rgba(15, 21, 18, 0.72);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--ld-text-sm);
+  font-weight: 700;
+}
+
+.scan-recorder-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--ld-radius-pill);
+  background: rgba(180, 38, 38, 0.9);
+  color: #fff;
+  font-size: var(--ld-text-xs);
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scan-recorder-dot i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.scan-recorder-guide {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--ld-radius-sm);
+  background: rgba(15, 21, 18, 0.74);
+  color: #fff;
+  font-size: var(--ld-text-sm);
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.scan-recorder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.scan-recorder-actions .scan-link-button {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.scan-recorder-status {
+  margin: 8px 0 0;
+  min-height: 1.4em;
+  color: var(--ld-ink-muted);
+  font-size: var(--ld-text-sm);
+  line-height: 1.5;
+}
+
+.scan-recorder-status[data-tone="error"] {
+  color: var(--ld-danger);
+}
+
+.scan-recorder-status[data-tone="ok"] {
+  color: var(--ld-green-deep);
+}
+
+.scan-tips-block {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-sm);
+  background: var(--ld-surface);
+}
+
+.scan-tips-block summary {
+  cursor: pointer;
+  color: var(--ld-ink-soft);
+  font-size: var(--ld-text-sm);
+  font-weight: 700;
+}
+
+.scan-tips-block .scan-tips {
+  margin-top: 8px;
+}
+
+/* Waiting panel: two saved examples, both free to open. */
+.scan-wait-links {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ld-line);
+  display: grid;
+  gap: 8px;
+}
+
+.scan-wait-links[hidden] {
+  display: none;
+}
+
+.scan-wait-links p {
+  margin: 0;
+  color: var(--ld-ink-muted);
+  font-size: var(--ld-text-sm);
+}
+
+.scan-wait-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--ld-green-deep);
+  font-size: var(--ld-text-sm);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.scan-wait-links svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 560px) {
+  .scan-source-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scan-recorder-stage {
+    aspect-ratio: 3 / 4;
+  }
+
+  .scan-recorder-actions .scan-link-button {
+    flex: 1 1 45%;
+  }
+}

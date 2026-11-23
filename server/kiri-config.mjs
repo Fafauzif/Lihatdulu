@@ -35,6 +35,7 @@ export const DEFAULTS = Object.freeze({
   keepJobs: 50,
   mockLatencyMs: 3_000,
   convertTimeoutMs: 10 * 60 * 1000,
+  transcodeTimeoutMs: 5 * 60 * 1000,
   // A phone clip is tens of megabytes and the seller's upstream can be slow, so
   // the upload gets its own budget instead of the short control-call timeout.
   uploadTimeoutMs: 15 * 60 * 1000,
@@ -193,6 +194,12 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
     convertTimeoutMs: positive(
       env.KIRI_CONVERT_TIMEOUT_MS,
       DEFAULTS.convertTimeoutMs,
+    ),
+    // WebM/QuickTime uploads are normalized to MP4 before KIRI sees them.
+    ffmpegPath: env.KIRI_FFMPEG_PATH || "ffmpeg",
+    transcodeTimeoutMs: positive(
+      env.KIRI_TRANSCODE_TIMEOUT_MS,
+      DEFAULTS.transcodeTimeoutMs,
     ),
     uploadTimeoutMs: positive(
       env.KIRI_UPLOAD_TIMEOUT_MS,

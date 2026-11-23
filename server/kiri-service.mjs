@@ -535,7 +535,14 @@ export function createKiriService({
     return withHashLock(args.videoHash, () => submitLocked(args));
   }
 
-  async function submitLocked({ tempPath, filename, bytes, videoHash, uploadMs = 0 }) {
+  async function submitLocked({
+    tempPath,
+    filename,
+    bytes,
+    videoHash,
+    uploadMs = 0,
+    transcodedFrom = null,
+  }) {
     const reusable = await findReusableByHash(jobsRoot, videoHash);
     if (reusable) {
       await rm(tempPath, { force: true }).catch(() => {});
@@ -548,6 +555,7 @@ export function createKiriService({
       filename,
       bytes,
       provider: client.provider,
+      transcodedFrom,
     });
     await saveNewJob(jobsRoot, record);
     let job = await updateJob(jobsRoot, record.id, {

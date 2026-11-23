@@ -13,7 +13,14 @@ import {
   retryJob,
   stageIndex,
 } from "./scan-api.js";
-import { detailRows, refineNote, sourceOptions } from "./scan-views.js";
+import {
+  detailRows,
+  hasPoorCoverage,
+  holeShare,
+  preferredSource,
+  refineNote,
+  sourceOptions,
+} from "./scan-views.js";
 
 export { renderScanPreview } from "./scan-views.js";
 
@@ -23,6 +30,22 @@ export { renderScanPreview } from "./scan-views.js";
 // A finished mesh job has up to three sources: the refined preview, KIRI's own
 // scan and the seller's photos. The refined one is preselected, but the buyer
 // can always reach the raw scan and the photos from the same page.
+
+// A saved, already-paid chair scan ships with the app so a judge can open a
+// real result without spending a credit or waiting. Its job record is a static
+// file, not a live server route, so it also works on a plain static host.
+export const DEMO_ID = "demo-chair";
+export const DEMO_URL = "/demo/kursi/job.json";
+
+export function isDemoId(id) {
+  return id === DEMO_ID;
+}
+
+export async function loadDemoJob(fetchImpl = fetch) {
+  const response = await fetchImpl(DEMO_URL, { headers: { accept: "application/json" } });
+  if (!response.ok) throw new Error("demo");
+  return response.json();
+}
 
 export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
   const host = root.matches?.("[data-scan-preview]") ? root : root.querySelector("[data-scan-preview]");
@@ -48,6 +71,8 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
   const refineLine = q("[data-scan-refine-note]");
   const photosPanel = q("[data-scan-photos]");
   const photoGrid = q("[data-scan-photo-grid]");
+  const openReason = q("[data-scan-open-reason]");
+  const openModel = q("[data-scan-open-model]");
 
   const controller = new AbortController();
   const { signal } = controller;
@@ -130,20 +155,18 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
         return item;
       }),
     );
+    const modelOption = (state.job ? sourceOptions(state.job) : []).find(
+      (option) => option.format,
+    );
+    openModel.hidden = !modelOption || state.source !== "photos";
+    openModel.textContent = modelOption?.id === "raw" ? "Buka pindaian asli" : PREVIEW_COPY.openModel;
     photosPanel.hidden = !photos.length || state.source !== "photos";
   }
 
   function paintSources(dto) {
     const options = sourceOptions(dto);
     const available = options.map((option) => option.id);
-    const preferred = available.includes("refined")
-      ? "refined"
-      : available.includes("raw")
-        ? "raw"
-        : available.includes("photos")
-          ? "photos"
-          : null;
-    if (!available.includes(state.source)) state.source = preferred;
+    if (!available.includes(state.source)) state.source = preferredSource(dto);
 
     tabs.hidden = options.length < 2;
     tabs.replaceChildren(
@@ -191,10 +214,21 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
       : PREVIEW_COPY.modelNote;
     errorCard.hidden = true;
     retryButton.hidden = true;
+    if (dto.demo === true) {
+      // Saved example: nothing to retry and nothing to re-refine here.
+      refineButton.hidden = true;
+      provider.textContent = PREVIEW_COPY.demoNote;
+    }
     paintStages(dto.stage);
 
     if (dto.stage === "ready") {
       statusCard.hidden = true;
+      const seeThrough =
+        hasPoorCoverage(dto) && (dto.photos ?? []).length
+          ? `Model ini masih tembus pandang di ${holeShare(dto.refine?.coverage?.holeRatioAfter)} siluetnya, jadi halaman ini membuka foto asli lebih dulu. Tab model 3D tetap tersedia.`
+          : "";
+      openReason.textContent = seeThrough;
+      openReason.hidden = !seeThrough;
       provenance.hidden = false;
       details.innerHTML = detailRows(dto)
         .map(([term, value]) => `<dt>${term}</dt><dd>${value}</dd>`)
@@ -213,11 +247,13 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
       refineLine.hidden = !refineLine.textContent;
       // The refine stage is free to retry from the saved GLB, so it is offered
       // whenever it did not apply and the job kept KIRI's mesh.
-      refineButton.hidden = !(
-        dto.artifact?.format === "glb" &&
-        dto.artifact?.raw &&
-        dto.refine?.status !== "applied"
-      );
+      refineButton.hidden =
+        dto.demo === true ||
+        !(
+          dto.artifact?.format === "glb" &&
+          dto.artifact?.raw &&
+          dto.refine?.status !== "applied"
+        );
       paintSources(dto);
       placeholder.hidden = viewerHost.dataset.state === "ready" || state.source === "photos";
       return;
@@ -225,6 +261,7 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
 
     statusCard.hidden = false;
     provenance.hidden = true;
+    openReason.hidden = true;
     refineLine.hidden = true;
     refineButton.hidden = true;
     tabs.hidden = true;
@@ -263,6 +300,7 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
     errorCard.hidden = true;
     refineLine.hidden = true;
     refineButton.hidden = true;
+    openReason.hidden = true;
     tabs.hidden = true;
     photosPanel.hidden = true;
     placeholder.hidden = false;
@@ -274,11 +312,11 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
     if (state.disposed) return;
     clearTimer();
     try {
-      const dto = await getJob(id);
+      const dto = isDemoId(id) ? await loadDemoJob() : await getJob(id);
       if (state.disposed) return;
       state.attempt = 0;
       paintJob(dto);
-      if (!isTerminalStage(dto.stage))
+      if (!isTerminalStage(dto.stage) && !isDemoId(id))
         state.timer = setTimeout(() => void load(), nextPollDelay(state.attempt++));
     } catch (error) {
       if (state.disposed || error?.name === "AbortError") return;
@@ -297,6 +335,20 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
       state.timer = setTimeout(() => void load(), nextPollDelay(state.attempt++));
     }
   }
+
+  openModel.addEventListener(
+    "click",
+    () => {
+      const option = (state.job ? sourceOptions(state.job) : []).find(
+        (candidate) => candidate.format,
+      );
+      if (!option) return;
+      state.source = option.id;
+      paintSources(state.job);
+      viewerHost.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    },
+    { signal },
+  );
 
   retryButton.addEventListener(
     "click",

@@ -59,13 +59,21 @@ active tree. It remains documented for provenance in
 
 `/jual/pindai`
 
-1. Choose an existing MP4 and preview it locally. Nothing is uploaded while the
-   seller is choosing.
+0. The release entry is the camera: **Rekam dengan kamera** opens an inline
+   recorder (rear camera, live timer, six guidance steps, review/retake). The
+   phone's own recorder is offered when the browser cannot record, and **Pilih
+   video** accepts an existing MP4, WebM or MOV. A saved real result is linked as
+   `/pindai/demo-chair` and needs no credits.
+1. The chosen or recorded clip is previewed locally. Nothing is uploaded while
+   the seller is choosing, and a browser that cannot read a streamed WebM's
+   duration is no longer mistaken for an unreadable file.
 2. The page states that the file goes to KIRI Engine for cloud processing, lists
    the four capture rules the trials produced, and requires an explicit consent
    checkbox before **Kirim ke KIRI Engine** works.
 3. Upload progress, queue, processing, download/conversion, success and failure
-   are shown as separate stages in Indonesian.
+   are shown as separate stages in Indonesian. Android's WebM (or an MOV) is
+   converted to MP4 on the server before KIRI sees it; `source.transcodedFrom`
+   keeps that provenance.
 4. **Buka hasil 3D** opens `/pindai/:id`, which polls the same job and lazy-loads
    the viewer: SparkJS for an SPZ splat cloud, three.js `GLTFLoader` for a GLB
    mesh (`KIRI_INPUT=mesh`).

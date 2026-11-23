@@ -16,6 +16,7 @@ import { createKiriClient } from "./kiri-client.mjs";
 import { createMockClient } from "./kiri-mock.mjs";
 import { createKiriService } from "./kiri-service.mjs";
 import { isJobId, jobPaths, readJob } from "./kiri-jobs.mjs";
+import { createVideoTranscoder, sniffVideoContainer } from "./kiri-transcode.mjs";
 
 // HTTP surface for the prototype. The browser only ever talks to /api/kiri/*;
 // the API key, the KIRI serial, the temporary video and the local paths stay on
@@ -76,6 +77,15 @@ export function isMp4Header(head) {
     head.length >= 12 &&
     head.toString("latin1", 4, 8) === "ftyp"
   );
+}
+
+// A converted clip is deduplicated by its own bytes, not by the upload it came
+// from: two different WebM recordings can normalize to the same MP4 only if they
+// really are the same content.
+async function hashFile(path) {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest("hex");
 }
 
 // Seller-provided measurements, never inferred from the mesh. The header is
@@ -331,6 +341,13 @@ export function createKiriServer({
   log = () => {},
   now = () => Date.now(),
   tempDir = join(config.jobsRoot, "tmp"),
+  transcoder = createVideoTranscoder({
+    ffmpegPath: config.ffmpegPath,
+    timeoutMs: config.transcodeTimeoutMs,
+    maxBytes: config.limits.maxUploadBytes,
+    maxDurationS: config.limits.maxDurationS,
+    log,
+  }),
 }) {
   return createServer(async (req, res) => {
     const started = now();
@@ -371,13 +388,37 @@ export function createKiriServer({
         await mkdir(tempDir, { recursive: true });
         const received = await receiveUpload(req, temp, config.limits.maxUploadBytes);
         if (!received.bytes) throw new KiriError("upload_empty");
-        if (!isMp4Header(received.head)) throw new KiriError("video_not_mp4");
+        const container = sniffVideoContainer(received.head);
+        if (container === "unknown") throw new KiriError("video_not_mp4");
+        // iPhone Safari records MP4; Android Chromium records WebM. One of them
+        // has to be converted before KIRI sees it, and the phone cannot be
+        // asked to do it. The converted file becomes the job's source.
+        let sourcePath = temp;
+        let sourceBytes = received.bytes;
+        let sourceHash = received.hash;
+        let transcodedFrom = null;
+        if (container !== "mp4") {
+          const converted = join(tempDir, `${randomUUID()}.mp4`);
+          try {
+            const output = await transcoder.toMp4({
+              inputPath: temp,
+              outputPath: converted,
+            });
+            sourcePath = converted;
+            sourceBytes = output.bytes;
+            sourceHash = await hashFile(converted);
+            transcodedFrom = container;
+          } finally {
+            await rm(temp, { force: true }).catch(() => {});
+          }
+        }
         const result = await service.submit({
-          tempPath: temp,
+          tempPath: sourcePath,
           filename: sanitizeFilename(decodeFilename(req.headers["x-file-name"])),
-          bytes: received.bytes,
-          videoHash: received.hash,
+          bytes: sourceBytes,
+          videoHash: sourceHash,
           uploadMs: now() - uploadStarted,
+          transcodedFrom,
         });
         sendJson(res, result.deduplicated ? 200 : 201, {
           ...service.dto(result.job),

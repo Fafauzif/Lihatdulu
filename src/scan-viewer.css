@@ -6,9 +6,20 @@
   overflow: hidden;
   aspect-ratio: 4 / 3;
   border-radius: var(--ld-radius-lg);
-  background: var(--ld-stage);
+  /* A light stage for meshes: dark wood and black fabric disappear against the
+     old near-black backdrop, and a photogrammetry texture already carries its
+     own shadow. Splats keep the dark stage they were authored against. */
+  background: linear-gradient(180deg, #f6f8f3 0%, #e6ebe2 100%);
   box-shadow: var(--ld-shadow-soft);
   touch-action: none;
+}
+
+.scan-viewer[data-format="spz"] {
+  background: var(--ld-stage);
+}
+
+.scan-viewer[data-format="spz"] .scan-viewer-placeholder {
+  color: var(--ld-stage-ink);
 }
 
 .scan-viewer-canvas {

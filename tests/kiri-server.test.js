@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readKiriConfig } from "../server/kiri-config.mjs";
 import { createMockClient } from "../server/kiri-mock.mjs";
 import { createKiriService } from "../server/kiri-service.mjs";
 import { createKiriServer } from "../server/kiri-server.mjs";
+import { KiriError } from "../server/kiri-errors.mjs";
 import { listJobs } from "../server/kiri-jobs.mjs";
 
 // End-to-end at the HTTP boundary with the mock adapter: a real upload, a real
@@ -18,6 +19,14 @@ function mp4(size = 512) {
     Buffer.from([0, 0, 0, 0x18]),
     Buffer.from("ftypisom", "latin1"),
     Buffer.alloc(size, 3),
+  ]);
+}
+
+// Android Chromium's MediaRecorder output: an EBML header, not an MP4 box.
+function webm(size = 512) {
+  return Buffer.concat([
+    Buffer.from([0x1a, 0x45, 0xdf, 0xa3]),
+    Buffer.alloc(size, 7),
   ]);
 }
 
@@ -51,7 +60,12 @@ async function start(t, overrides = {}) {
     log,
     ...(overrides.frames ? { frames: overrides.frames } : {}),
   });
-  const server = createKiriServer({ config, service, log });
+  const server = createKiriServer({
+    config,
+    service,
+    log,
+    ...(overrides.transcoder ? { transcoder: overrides.transcoder } : {}),
+  });
   await new Promise((done) => server.listen(0, "127.0.0.1", done));
   t.after(
     () =>
@@ -275,4 +289,57 @@ test("a mesh job serves its GLB at result.glb and never at result.spz", async (t
   assert.equal(head.status, 200);
   assert.equal(head.headers.get("content-length"), String(bytes.length));
   assert.equal((await listJobs(root)).length, 1);
+});
+
+test("a WebM recording from Android is converted, then submitted once", async (t) => {
+  const converted = mp4(256);
+  const calls = [];
+  const { base } = await start(t, {
+    transcoder: {
+      async toMp4({ inputPath, outputPath }) {
+        calls.push({ inputPath, outputPath });
+        await writeFile(outputPath, converted);
+        return { converted: true, bytes: converted.length, durationS: 12 };
+      },
+    },
+  });
+  const { status, body } = await upload(base, webm(), { name: "rekaman.webm", type: "video/webm" });
+  assert.equal(status, 201, JSON.stringify(body));
+  assert.equal(calls.length, 1, "one conversion, not one per attempt");
+  assert.equal(body.source.transcodedFrom, "webm");
+  assert.equal(body.source.bytes, converted.length);
+  assert.equal(body.source.filename.endsWith(".mp4"), true);
+});
+
+test("a non-video body is refused before any conversion or credit", async (t) => {
+  const calls = [];
+  const { base } = await start(t, {
+    transcoder: {
+      async toMp4() {
+        calls.push("called");
+        throw new Error("should not run");
+      },
+    },
+  });
+  const { status, body } = await upload(base, Buffer.from("<html>not a video</html>"), {
+    name: "catatan.mp4",
+    type: "video/mp4",
+  });
+  assert.equal(status, 415);
+  assert.equal(body.error.code, "video_not_mp4");
+  assert.equal(calls.length, 0);
+});
+
+test("a failed conversion reports the camera-app fallback, not a stuck spinner", async (t) => {
+  const { base } = await start(t, {
+    transcoder: {
+      async toMp4() {
+        throw new KiriError("video_needs_converter");
+      },
+    },
+  });
+  const { status, body } = await upload(base, webm(), { name: "rekaman.webm", type: "video/webm" });
+  assert.equal(status, 415);
+  assert.equal(body.error.code, "video_needs_converter");
+  assert.match(body.error.message, /aplikasi kamera/);
 });

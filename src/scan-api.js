@@ -42,7 +42,13 @@ export const ERROR_COPY = Object.freeze({
   video_too_large_dimensions:
     "Resolusi video di atas 1920×1080. KIRI hanya menerima sampai Full HD.",
   video_not_mp4: "Berkas ini bukan MP4. Pilih video MP4 dari galeri.",
-  video_unreadable: "Video ini tidak bisa dibaca browser. Coba MP4 lain.",
+  video_too_long:
+    "Video lebih dari 3 menit. Rekam satu putaran barang saja, lalu coba lagi.",
+  video_needs_converter:
+    "Rekaman ini berformat WebM dan server belum bisa mengonversinya. Rekam lewat aplikasi kamera atau pilih berkas MP4.",
+  video_convert_failed:
+    "Rekaman gagal dikonversi ke MP4. Coba rekam lagi, atau pilih berkas MP4 dari galeri.",
+  video_unreadable: "Video ini tidak bisa dibaca browser. Coba rekam ulang atau pilih berkas lain.",
   upload_empty: "Berkas video kosong. Pilih video lain.",
   photos_too_few:
     "Kirim minimal 20 foto. KIRI meminta 20 sampai 300 sudut untuk menyusun bentuk.",
@@ -75,12 +81,12 @@ export const ERROR_COPY = Object.freeze({
 
 export const UPLOAD_COPY = Object.freeze({
   title: "Ubah video barangmu menjadi model 3D.",
-  lede: "Pilih satu video MP4 yang sudah ada. Video dikirim ke KIRI Engine untuk diproses di cloud, lalu hasilnya bisa diputar di halaman ini.",
+  lede: "Rekam satu putaran pelan, atau pilih video yang sudah ada. Video dikirim ke KIRI Engine untuk diproses di cloud, lalu hasilnya bisa diputar di halaman ini.",
   consent:
     "Saya setuju video ini dikirim ke KIRI Engine untuk diproses di cloud.",
   submit: "Kirim ke KIRI Engine",
   submitting: "Mengirim…",
-  pick: "Pilih video MP4",
+  pick: "Pilih video",
   change: "Ganti video",
   openResult: "Buka hasil 3D",
   another: "Pindai barang lain",
@@ -105,6 +111,8 @@ export const PREVIEW_COPY = Object.freeze({
   retry: "Coba proses ulang",
   modelNote:
     "Model 3D ini berasal dari video yang diproses KIRI Engine, bukan contoh Sora.",
+  demoNote:
+    "Contoh tersimpan: satu pindaian kursi asli yang sudah diproses KIRI Engine. Tidak ada kredit terpakai untuk membukanya.",
   hint: "Tarik untuk memutar · cubit untuk memperbesar",
   // Source tabs on the result page: the refined preview, KIRI's own mesh, the
   // seller's stills. The refined one is always labelled as an estimate.
@@ -118,6 +126,7 @@ export const PREVIEW_COPY = Object.freeze({
   photosNote:
     "Foto ini yang dilihat KIRI. Bandingkan dengan model: warna, tekstur, dan lubang asli paling jelas di sini.",
   photosCaveat: "Tampilan foto, bukan model 3D.",
+  openModel: "Buka model 3D",
   refine: "Coba haluskan lagi",
   // Measured, not boilerplate: the knit backrest and the glossy base are the two
   // parts KIRI lost on every route, and both are visible in this viewer.
@@ -134,7 +143,16 @@ export const DEFAULT_LIMITS = Object.freeze({
   maxHeight: 1080,
 });
 
-const MP4_NAME = /\.mp4$/i;
+// MP4 is what KIRI accepts; WebM and MOV are what phones actually record. The
+// server normalizes the last two to MP4 before KIRI sees them, so the browser
+// must not reject a clip the pipeline can use.
+const ACCEPTED_NAME = /\.(mp4|webm|mov)$/i;
+const ACCEPTED_TYPES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-m4v",
+]);
 
 export function validationError(code) {
   return { ok: false, code, message: ERROR_COPY[code] ?? ERROR_COPY.default };
@@ -146,8 +164,8 @@ export function validateVideoBasics(
   { name = "", type = "", size = 0 } = {},
   limits = DEFAULT_LIMITS,
 ) {
-  const isMp4 = MP4_NAME.test(name) || type === "video/mp4";
-  if (!isMp4) return validationError("video_not_mp4");
+  const accepted = ACCEPTED_NAME.test(name) || ACCEPTED_TYPES.has(type);
+  if (!accepted) return validationError("video_not_mp4");
   if (!size) return validationError("upload_empty");
   if (size > limits.maxUploadBytes) return validationError("video_too_large");
   return { ok: true, code: null, message: "" };
@@ -161,11 +179,15 @@ export function validateVideoFile(file = {}, limits = DEFAULT_LIMITS) {
   const basics = validateVideoBasics(file, limits);
   if (!basics.ok) return basics;
   const { durationS = 0, width = 0, height = 0 } = file;
-  if (!Number.isFinite(durationS) || durationS <= 0)
+  // Android records WebM without a duration header. `null` means "the browser
+  // cannot tell us yet" and the server enforces the limit after converting;
+  // 0 or NaN means the file itself is unreadable.
+  const durationUnknown = durationS === null;
+  if (!durationUnknown && (!Number.isFinite(durationS) || durationS <= 0))
     return validationError("video_unreadable");
   // A 3-minute limit is tight for a walk-around; allow a second of container
   // rounding rather than rejecting a clip KIRI would accept.
-  if (durationS > limits.maxDurationS + 1)
+  if (!durationUnknown && durationS > limits.maxDurationS + 1)
     return validationError("video_too_long");
   const longEdge = Math.max(width, height);
   const shortEdge = Math.min(width, height);
@@ -186,7 +208,9 @@ export function formatBytes(bytes) {
 }
 
 export function formatDuration(seconds) {
-  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return "—";
+  const total = Math.max(0, Math.round(value));
   const minutes = Math.floor(total / 60);
   const rest = total % 60;
   return minutes ? `${minutes} mnt ${String(rest).padStart(2, "0")} dtk` : `${rest} dtk`;

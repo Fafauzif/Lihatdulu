@@ -2,7 +2,7 @@
 
 | Area | Current decision | Revisit when |
 |---|---|---|
-| Seller capture | Upload-only for now: choose an existing MP4 inside `/jual`, preview and confirm before sending. The in-browser camera comes after one real clip passes end-to-end. | A live KIRI result opens cleanly in the viewer and the phone capture can reuse the same submit path. |
+| Seller capture | Camera-first at `/jual/pindai`: rear camera, 8–45 s, live timer and guidance, review/retake, plus a native-camera fallback and an existing-file picker on the same consent → submit path. A saved example (`/pindai/demo-chair`) is one tap away. | A real clip fails end-to-end on a phone, or the recorder's browser support changes. |
 | Scan provider | KIRI Engine cloud (3DGS video job, automatic object masking) behind a server-side adapter. The local FFmpeg → COLMAP → Brush worker is retired from the active tree. | KIRI reliability, cost, retention or result quality fails the live test. |
 | Scan credentials | `KIRI_API_KEY` is server-only, read from the environment or a local git-ignored `.env`, never sent to the browser, written to a job record or logged. | The deployment needs a managed secret store or per-user keys. |
 | Network and state | One same-origin Node process serves the built site, SPA routes and `/api/kiri`; job records and artifacts live under the git-ignored `var/kiri`. | The demo needs multiple workers or permanent cross-device access. |
@@ -12,9 +12,11 @@
 | Scope | Keep Vite/JavaScript/Three.js and existing marketplace behaviors. Improve in tested slices. | The owner approves a different stack or changes a core product contract. |
 | Capture guidance | Use clear filming instructions first. Show coverage only where real processing supplies evidence. | A measured coverage method proves helpful during recording. |
 | Scan runtime | A KIRI serial is stored against an opaque LihatDulu UUID; polling backs off, and the result ZIP is downloaded, validated and converted server-side. Opaque IDs are the capability; no job list, no accounts. | A second worker or persistent ownership is needed. |
-| Scan limits | MP4 up to 200 MB, 3 minutes, 1920×1080; KIRI serial and artifact retained for the KIRI 3-day window; 60 MB / 2.5 M splat artifact cap; 50 terminal jobs kept. | Real footage shows the limits are wrong for a chair. |
+| Scan input formats | iPhone MP4 passes through; Android WebM and MOV are converted to MP4 by FFmpeg on the server (`KIRI_FFMPEG_PATH`, 5 min timeout) and the container is recorded as `source.transcodedFrom`. A streamed WebM with no duration header is accepted; the server enforces the length after conversion. | FFmpeg is unavailable on the host, or KIRI accepts WebM directly. |
+| Scan limits | MP4/WebM/MOV up to 200 MB, 3 minutes, 1920×1080; KIRI serial and artifact retained for the KIRI 3-day window; 60 MB / 2.5 M splat artifact cap; 50 terminal jobs kept. | Real footage shows the limits are wrong for a chair. |
 | Scan dedupe | SHA-256 of the uploaded bytes; a ready or active job is reused and never resubmitted. Failed or expired jobs are not reused; retry is only an explicit user action and never re-submits. | The same clip must produce two different results or a second retry path is needed. |
-| Scan toolchain | The only external process is the pinned `@playcanvas/splat-transform` converter in `node_modules`; no COLMAP, Brush, CUDA, FFmpeg or PATH changes. `docs/handoff/scan-toolchain.md` is historical. | KIRI changes its PLY layout or the converter pin is upgraded. |
+| Judging host | One same-origin Node process (`server/kiri-server.mjs`, `KIRI_SERVE_DIST=1`) served from a Docker image with FFmpeg and a job volume; `vercel.json` rewrites deep links on the static Vercel site, which cannot host the backend. HTTPS is required for the phone camera. | A managed host with persistent disk and HTTPS is chosen. |
+| Scan toolchain | The external processes are FFmpeg (WebM/MOV → MP4 for KIRI) and the pinned `@playcanvas/splat-transform` converter in `node_modules`; no COLMAP, Brush or CUDA anywhere in the active path. `docs/handoff/scan-toolchain.md` is historical. | KIRI changes its PLY layout or the converter pin is upgraded. |
 | Refinement | A local, free, retryable stage over KIRI's saved GLB: fragments under 6 % of the body are removed, cracks under 5 % of the diagonal are filled only through a normal gate, the subject is centred and framed into 1 m. The raw file is never rewritten, and the stage can be retried from it without a new submission. | A real capture is made worse by it, or KIRI starts returning cleaner meshes where the stage has nothing to do. |
 | Disclosing holes | Coverage is measured, report-only and never gates filling: `bersih` when ≤ 2 % of the silhouette sees through, `berlubang` otherwise. A perforated preview says so in the refine line. Real openings (handles, mesh backs, shelves) stay open. | A shaped, non-destructive fill can be validated on real captures without erasing wear or inventing parts. |
 | Completion | Photo-conditioned completion is implemented as an evaluated candidate and **not shipped**: the visual hull scored silhouette IoU 0.026 vs 0.144 unrepaired, covered 0 % of the scan surface and invented a slab. Geometry repair only; the limit is documented. | A photo-conditioned generator beats the unrepaired scan on matched silhouette IoU and invents no major part. |
@@ -26,6 +28,7 @@
 
 - One authorized live KIRI run: does a real clip open as a usable chair, how long does it take, and how large is the SPZ? Nothing has been submitted yet.
 - KIRI credit budget, serial retention and whether the demo needs a pre-existing domain or a temporary HTTPS link.
-- Whether the in-browser camera is needed for judging or an upload-only flow is enough.
+- Physical-phone acceptance on the real judging URL: record, preview, submit, refresh mid-process, orbit, open photos, reopen.
+- Where the judging build lives (Docker host + HTTPS), and whether the static Vercel site should point at it.
 - Whether the homepage should remain a distinct gateway once feedback on its first screen is collected. Keep the two entrances for the first pass.
 - Exact style and final breakpoint after human review. The supplied pilot screens establish one testable direction.
