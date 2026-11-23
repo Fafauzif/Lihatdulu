@@ -48,7 +48,7 @@ next action.
 |---|---|---|
 | Unit suite | `npm run test:unit` | **326 tests, 325 pass, 1 skipped, 0 fail** |
 | Marketplace acceptance | `npm run test:browser` | **26 passed, 0 failed** |
-| Scan acceptance (mocks) | `node scripts/verify-kiri-scan.mjs` | **31/31 checks**, screenshots in `var/kiri-qa` |
+| Scan acceptance (mocks) | `node scripts/verify-kiri-scan.mjs` | **33/33 checks**, including a fake-camera recording run, screenshots in `var/kiri-qa` |
 | Build | `npm run build` | green (pre-existing chunk-size warning) |
 | Deep links on the Node host | `curl` on `127.0.0.1:8795` | `/`, `/beli`, `/jual`, `/jual/pindai`, `/pindai/demo-chair`, `/barang/sora` → **200 text/html** |
 | Same-origin LAN host | `KIRI_HOST=0.0.0.0 KIRI_PORT=8797` | deep links 200 from `http://192.168.0.128:8797` (camera needs HTTPS, fallback shown) |
