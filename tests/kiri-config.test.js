@@ -29,19 +29,25 @@ test("parseDotEnv reads plain, quoted and exported values", () => {
   assert.equal(values.KIRI_JOBS_ROOT, "var/kiri");
 });
 
-test("KIRI_INPUT selects the stills profiles and unknown values stay on video", () => {
+test("KIRI_INPUT selects the stills profiles and unknown values fall back to Photo Scan", () => {
   const base = { KIRI_API_KEY: "kiri-test-key" };
-  assert.equal(readKiriConfig(base, process.cwd()).input.mode, "video");
+  // The shipped default is the route that isolated the chair: Photo Scan.
+  assert.equal(readKiriConfig(base, process.cwd()).input.mode, "photo");
+  assert.equal(
+    readKiriConfig({ ...base, KIRI_INPUT: "video" }, process.cwd()).input.mode,
+    "video",
+  );
   for (const mode of ["splat", "photo", "mesh"]) {
     assert.equal(
       readKiriConfig({ ...base, KIRI_INPUT: mode }, process.cwd()).input.mode,
       mode,
     );
   }
-  // A typo must never silently pick a paid profile.
+  // A typo must behave exactly like no setting at all, never like a third
+  // profile the operator did not ask for.
   assert.equal(
     readKiriConfig({ ...base, KIRI_INPUT: "glb" }, process.cwd()).input.mode,
-    "video",
+    "photo",
   );
   assert.equal(
     readKiriConfig({ ...base, KIRI_INPUT: "mesh" }, process.cwd()).input.fileFormat,
@@ -66,8 +72,8 @@ test("Photo Scan quality knobs default to KIRI's documented values", () => {
   const base = { KIRI_API_KEY: "kiri-test-key" };
   const input = (env = {}) => readKiriConfig({ ...base, ...env }, process.cwd()).input;
   const defaults = input();
-  // 0 is "best" for modelQuality (0 High … 3 Ultra) and "4K" for textureQuality.
-  assert.equal(defaults.modelQuality, 0);
+  // 3 is Ultra, the model that produced the best chair; 0 is a 4K texture.
+  assert.equal(defaults.modelQuality, 3);
   assert.equal(defaults.textureQuality, 0);
   // The docs recommend texture smoothing off for precise professional scans.
   assert.equal(defaults.textureSmoothing, 0);
@@ -82,8 +88,8 @@ test("Photo Scan quality knobs default to KIRI's documented values", () => {
   assert.equal(ultra.textureSmoothing, 1);
 
   // Out-of-range and non-integer values fall back instead of reaching KIRI.
-  assert.equal(input({ KIRI_MODEL_QUALITY: "9" }).modelQuality, 0);
-  assert.equal(input({ KIRI_MODEL_QUALITY: "-1" }).modelQuality, 0);
+  assert.equal(input({ KIRI_MODEL_QUALITY: "9" }).modelQuality, 3);
+  assert.equal(input({ KIRI_MODEL_QUALITY: "-1" }).modelQuality, 3);
   assert.equal(input({ KIRI_TEXTURE_QUALITY: "2.5" }).textureQuality, 0);
   assert.equal(input({ KIRI_TEXTURE_QUALITY: "8k" }).textureQuality, 0);
 });
@@ -96,7 +102,7 @@ test("the mesh artifact has its own size ceiling", () => {
   assert.equal(config.limits.maxModelBytes, 123456);
   // The SPZ ceiling is untouched by the mesh knob.
   assert.equal(config.limits.maxArtifactBytes, DEFAULTS.maxArtifactBytes);
-  assert.equal(publicConfig(config).inputMode, "video");
+  assert.equal(publicConfig(config).inputMode, "photo");
 });
 
 test("loadDotEnv never overwrites an existing variable", async (t) => {

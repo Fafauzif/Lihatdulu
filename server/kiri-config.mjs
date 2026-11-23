@@ -30,7 +30,9 @@ export const DEFAULTS = Object.freeze({
   // the upload gets its own budget instead of the short control-call timeout.
   uploadTimeoutMs: 15 * 60 * 1000,
   isMask: 1,
-  inputMode: "video",
+  // Photo Scan is the shipped default: it is the only route in the overnight
+  // matrix that returned the chair itself rather than the room around it.
+  inputMode: "photo",
   cropMode: "off",
   frameFps: 4,
   photoCount: 120,
@@ -159,7 +161,8 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
     input: {
       // See INPUT_MODES above: "video" sends the clip, "splat" and "photo" send
       // stills to the 3DGS and Photo Scan routes, "mesh" asks the
-      // featureless-object pipeline for a GLB. Video stays the default.
+      // featureless-object pipeline for a GLB. Photo Scan is the default
+      // because it is the only route that isolated the chair.
       mode: inputMode(env.KIRI_INPUT || DEFAULTS.inputMode),
       fps: positive(env.KIRI_FRAME_FPS, DEFAULTS.frameFps),
       photos: positive(env.KIRI_PHOTO_COUNT, DEFAULTS.photoCount),
@@ -169,7 +172,7 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
       fileFormat: "GLB",
       // Photo Scan only. Documented at
       // https://docs.kiriengine.app/photo-scan/image-upload
-      modelQuality: quality(env.KIRI_MODEL_QUALITY, 0),
+      modelQuality: quality(env.KIRI_MODEL_QUALITY, 3),
       textureQuality: quality(env.KIRI_TEXTURE_QUALITY, 0),
       // Docs recommend smoothing off for professional scans that need precision.
       textureSmoothing: flag(env.KIRI_TEXTURE_SMOOTHING, false) ? 1 : 0,

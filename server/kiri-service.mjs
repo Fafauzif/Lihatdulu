@@ -185,6 +185,13 @@ export function createKiriService({
         return;
       }
       if (status.state === "successful") {
+        // Record KIRI's terminal status before finalizing. If the download or
+        // the conversion fails, the job is retryable, but its provenance must
+        // still say KIRI finished instead of freezing on "processing".
+        job =
+          (await updateJob(jobsRoot, job.id, {
+            kiri: { ...job.kiri, status: status.status },
+          })) ?? job;
         await finalize(job);
         return;
       }

@@ -50,6 +50,17 @@
   text-align: center;
 }
 
+.scan-viewer-caveat {
+  max-width: 62ch;
+  margin: 6px auto 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--ld-line-strong);
+  color: var(--ld-ink-soft);
+  font-size: var(--ld-text-xs, 12px);
+  line-height: 1.5;
+  text-align: left;
+}
+
 .scan-preview-side {
   display: flex;
   flex-direction: column;

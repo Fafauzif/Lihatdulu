@@ -557,6 +557,55 @@ async function layoutFacts(page) {
   await context.close();
 }
 
+// 6. The Photo Scan profile: KIRI's object route. It answers with a mesh too,
+// so the viewer must take the GLB branch and the job must never claim splats.
+{
+  await stopServer();
+  await startServer({ input: "photo" });
+  const { context, page } = await newPage();
+  await check("photo profile builds a GLB and serves it to the viewer", async () => {
+    await open(page, "/jual/pindai");
+    await pickClip(page, meshClip);
+    await submitClip(page);
+    const state = await waitForJobEnd(page);
+    assert.equal(state.error, null);
+    await page.locator("[data-scan-open]").click();
+    await page.waitForURL(/\/pindai\/[0-9a-f-]{36}$/);
+    const viewer = page.locator("[data-scan-viewer]");
+    await viewer.waitFor({ state: "visible" });
+    await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+    const triangles = await viewer.getAttribute("data-triangles");
+    assert.equal(Number(triangles), 72);
+    // A photo job is a mesh job: the splat counter must stay unset.
+    assert.equal(await viewer.getAttribute("data-splats"), null);
+    const details = await page.locator("[data-scan-details]").textContent();
+    assert.match(details, /Jumlah segitiga/);
+    assert.match(details, /Ukuran GLB/);
+    assert.doesNotMatch(details, /Jumlah splat/);
+    await shot(page, "14-photo-result");
+    return { triangles: Number(triangles), stages: state.seen };
+  });
+
+  await check("the photo result can be orbited", async () => {
+    return orbitProof(page, "15-photo-orbit");
+  });
+
+  await check("the photo result survives a reload without a new submission", async () => {
+    const before = await jobCount();
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+    assert.equal(await jobCount(), before);
+    return { jobs: before };
+  });
+
+  await check("the photo flow raised no page errors or failed responses", async () => {
+    assert.deepEqual(report.pageErrors, []);
+    assert.deepEqual(report.failedResponses, []);
+    return { pageErrors: 0, failedResponses: 0 };
+  });
+  await context.close();
+}
+
 await browser.close();
 await stopServer();
 report.finished = new Date().toISOString();

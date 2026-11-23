@@ -163,6 +163,33 @@ test("an expired KIRI job is marked expired, not retryable", async (t) => {
   assert.ok(service);
 });
 
+test("a successful poll records KIRI's status before the download", async (t) => {
+  // The download failing must not leave the provenance stuck on "processing":
+  // KIRI said 2, and the job record has to say so even when finalize dies.
+  const { root, service, upload } = await setup(t, { latencyMs: 5_000 });
+  const { job } = await upload();
+  const client = {
+    getStatus: async () => ({ status: 2, state: "successful" }),
+    downloadZip: async () => {
+      throw new Error("network down");
+    },
+  };
+  const polling = createKiriService({
+    config: readKiriConfig(
+      { KIRI_MOCK: "1", KIRI_JOBS_ROOT: root, KIRI_POLL_MIN_MS: "600000" },
+      process.cwd(),
+    ),
+    client,
+  });
+  t.after(() => polling.stop());
+  await polling.tick(job.id);
+  const stored = await readJob(root, job.id);
+  assert.equal(stored.kiri.status, 2);
+  assert.equal(stored.stage, "failed");
+  assert.ok(stored.error.code);
+  assert.ok(service);
+});
+
 test("resume marks a job interrupted mid-submit instead of polling forever", async (t) => {
   const { root, service } = await setup(t);
   const record = newJobRecord({
@@ -433,44 +460,18 @@ test("a stills submit failure is not retried as a video submit", async (t) => {
   assert.equal((await readdir(join(jobsRoot, "jobs", job.id))).includes("frames"), false);
 });
 
-test("the default profile still uploads the video itself", async (t) => {
-  const jobsRoot = await mkdtemp(join(tmpdir(), "lihatdulu-video-"));
-  t.after(() => rm(jobsRoot, { recursive: true, force: true }));
-  const calls = { images: 0, video: 0, extract: 0 };
-  const config = readKiriConfig(
-    { KIRI_API_KEY: "kiri-test-key", KIRI_JOBS_ROOT: jobsRoot, KIRI_POLL_MIN_MS: "600000", KIRI_POLL_MAX_MS: "600000" },
-    process.cwd(),
-  );
-  const client = {
-    provider: "kiri",
-    async submitVideo() {
-      calls.video += 1;
-      return { serial: "videoserial1234" };
-    },
-    async submitImages() {
-      calls.images += 1;
-      return { serial: "photoserial12345" };
-    },
-    async getStatus() {
-      return { status: 3, state: "queuing" };
-    },
-    async downloadZip() {},
-  };
-  const frames = {
-    async extract() {
-      calls.extract += 1;
-      return [];
-    },
-  };
-  const service = createKiriService({ config, client, frames });
-  t.after(() => service.stop());
-  const temp = join(jobsRoot, "kursi.mp4");
-  await writeFile(temp, Buffer.alloc(64, 1));
-  const { job } = await service.submit({ tempPath: temp, filename: "kursi.mp4", bytes: 64, videoHash: "hash-v" });
-  assert.equal(calls.video, 1);
-  assert.equal(calls.images, 0);
-  assert.equal(calls.extract, 0);
-  assert.equal((await readJob(jobsRoot, job.id)).input.mode, "video");
+test("the shipped default asks Photo Scan for a mesh, not the raw clip", async (t) => {
+  const { root, service, upload, config } = await setup(t, { frames: stillFrames() });
+  // With nothing configured the app must pick the route that produced the best
+  // chair in the overnight matrix, at Ultra: the default is the product.
+  assert.equal(config.input.mode, "photo");
+  assert.equal(config.input.modelQuality, 3);
+  const { job } = await upload();
+  const submitted = await readJob(root, job.id);
+  assert.equal(submitted.input.mode, "photo");
+  assert.equal(submitted.input.kind, "mesh");
+  assert.equal(submitted.input.photos, 24);
+  assert.match(submitted.kiri.serial, /^mock-photo-/);
 });
 
 // --- KIRI Photo Scan profile ----------------------------------------------

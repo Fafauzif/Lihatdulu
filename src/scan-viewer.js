@@ -26,7 +26,7 @@ const MESH_FIT = 0.9;
 // Photogrammetry shells come back underexposed under plain analytic lights, so
 // the mesh path gets a real environment and a filmic curve. The splat path is
 // untouched: Spark shades its own gaussians.
-const MESH_EXPOSURE = 1.08;
+const MESH_EXPOSURE = 1.3;
 
 export function mountScanViewer(
   root,
@@ -188,11 +188,11 @@ export function mountScanViewer(
     const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
     scene.environment = environment;
-    scene.environmentIntensity = 1.0;
+    scene.environmentIntensity = 1.15;
 
     // A soft key from above-left and a cool rim keep the silhouette readable
     // against the stage colour without washing the fabric out.
-    const key = new THREE.DirectionalLight(0xfff6ec, 1.35);
+    const key = new THREE.DirectionalLight(0xfff6ec, 1.6);
     key.position.set(2.6, 4.2, 3.2);
     scene.add(key);
     const rim = new THREE.DirectionalLight(0xd7e4ff, 0.85);

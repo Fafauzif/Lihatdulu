@@ -138,6 +138,41 @@
   font-weight: 700;
 }
 
+.scan-tips-head {
+  margin: 16px 0 6px;
+  color: var(--ld-ink);
+  font-size: var(--ld-text-sm);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.scan-tips {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scan-tips li {
+  position: relative;
+  padding-left: 18px;
+  color: var(--ld-ink-soft);
+  font-size: var(--ld-text-sm);
+  line-height: 1.5;
+}
+
+.scan-tips li::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  border: 1px solid var(--ld-line-strong);
+}
+
 .scan-link-button {
   display: inline-flex;
   align-items: center;

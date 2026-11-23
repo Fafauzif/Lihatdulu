@@ -25,6 +25,16 @@ export const STAGE_HEADING = Object.freeze({
   expired: "Hasil kedaluwarsa",
 });
 
+// Capture guidance for the upload page. Each line comes from a measured failure
+// in the KIRI trials: see-through mesh (knit backrest) left a void, a backlit
+// room dropped the gas-lift column, and fast motion blurred the frames.
+export const CAPTURE_TIPS = Object.freeze([
+  "Pilih barang matte dan padat. Jaring tipis, kaca, atau bahan tembus cahaya sering berlubang pada hasil.",
+  "Nyalakan lampu ruangan dan hindari jendela tepat di belakang barang. Bagian yang selalu gelap tidak terbentuk.",
+  "Berjalan satu putaran pelan dengan jarak tetap, barang utuh di dalam bingkai dari bawah sampai atas.",
+  "Rekam juga bagian yang tersembunyi, misalnya kaki dan kolom di bawah dudukan, karena kamera tidak bisa menebaknya.",
+]);
+
 export function stageListMarkup() {
   return STAGE_SEQUENCE.map(
     (stage) =>
@@ -50,6 +60,8 @@ export function renderScanUpload() {
           <h2>Pilih video MP4</h2>
         </div>
         <p class="scan-panel-note">Satu video untuk satu barang. Rekam 30–60 detik sambil berjalan mengelilingi barang.</p>
+        <p class="scan-tips-head">Supaya hasilnya bersih</p>
+        <ul class="scan-tips" data-scan-tips>${CAPTURE_TIPS.map((tip) => `<li>${tip}</li>`).join("")}</ul>
         <input class="scan-file-input" data-scan-input type="file" accept="video/mp4" hidden>
         <div class="scan-drop" data-scan-drop>
           <button type="button" class="scan-choose" data-scan-choose>${icon("film")} ${UPLOAD_COPY.pick}</button>
@@ -124,6 +136,7 @@ export function renderScanPreview() {
           <p class="scan-viewer-placeholder" data-scan-viewer-placeholder>Menunggu model siap…</p>
         </div>
         <p class="scan-viewer-hint-line">${PREVIEW_COPY.hint}</p>
+        <p class="scan-viewer-caveat" data-scan-caveat>${PREVIEW_COPY.caveat}</p>
       </div>
       <aside class="scan-preview-side">
         <section class="scan-card" data-scan-status>

@@ -18,7 +18,7 @@ import {
   validateVideoBasics,
   validateVideoFile,
 } from "../src/scan-api.js";
-import { detailRows, renderScanPreview, renderScanUpload } from "../src/scan-views.js";
+import { CAPTURE_TIPS, detailRows, renderScanPreview, renderScanUpload } from "../src/scan-views.js";
 
 function fakeStorage(initial = {}) {
   const data = new Map(Object.entries(initial));
@@ -159,6 +159,23 @@ test("the upload page asks for consent and never mentions a camera", () => {
   assert.match(html, /data-scan-mode/);
 });
 
+test("the upload page carries the measured capture guidance", () => {
+  const html = renderScanUpload();
+  assert.match(html, /Supaya hasilnya bersih/);
+  assert.match(html, /data-scan-tips/);
+  assert.equal(CAPTURE_TIPS.length, 4);
+  for (const tip of CAPTURE_TIPS) {
+    assert.ok(tip.length > 40, `tip too short: ${tip}`);
+    assert.ok(html.includes(tip), `tip missing from markup: ${tip}`);
+  }
+  // The evidence for every line: see-through mesh, backlight, motion blur and
+  // unseen undersides are the four defects the KIRI trials actually produced.
+  assert.match(html, /tembus cahaya/);
+  assert.match(html, /jendela tepat di belakang/);
+  assert.match(html, /putaran pelan/);
+  assert.match(html, /kolom di bawah dudukan/);
+});
+
 test("the result page embeds the existing SPZ viewer and both actions", () => {
   const html = renderScanPreview();
   assert.match(html, /class="scan-viewer" data-scan-viewer/);
@@ -166,6 +183,9 @@ test("the result page embeds the existing SPZ viewer and both actions", () => {
   assert.match(html, /href="\/jual\/pindai" data-nav/);
   assert.match(html, /href="\/beli" data-nav/);
   assert.match(html, /Tarik untuk memutar/);
+  // The measured caveat ships with the viewer, not only in the docs.
+  assert.match(html, /data-scan-caveat/);
+  assert.match(html, /bahan tembus cahaya dapat berlubang/);
 });
 
 test("result details label mock results honestly and hide long serials", () => {
@@ -219,7 +239,7 @@ test("a photo result names Photo Scan and its quality, not featureless", () => {
     rows.find(([term]) => term === "Sumber")[1],
     "KIRI Engine · Photo Scan Ultra, masking otomatis, 101 foto dari video",
   );
-  // The default modelQuality is 0, which KIRI calls High.
+  // A job recorded before Ultra became the default still says High.
   const high = detailRows({
     mock: false,
     input: { mode: "photo", photos: 24, modelQuality: 0 },

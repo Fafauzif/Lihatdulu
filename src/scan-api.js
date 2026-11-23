@@ -103,6 +103,10 @@ export const PREVIEW_COPY = Object.freeze({
   modelNote:
     "Model 3D ini berasal dari video yang diproses KIRI Engine, bukan contoh Sora.",
   hint: "Tarik untuk memutar · cubit untuk memperbesar",
+  // Measured, not boilerplate: the knit backrest and the glossy base are the two
+  // parts KIRI lost on every route, and both are visible in this viewer.
+  caveat:
+    "Hasil cloud bergantung pada rekaman: bahan tembus cahaya dapat berlubang, dan bagian yang mengkilap atau tidak pernah terlihat kamera dapat kehilangan bentuk.",
 });
 
 export const STORAGE_KEY = "lihatdulu:kiri-job";
