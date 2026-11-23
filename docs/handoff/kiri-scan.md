@@ -31,6 +31,14 @@ orbit hint.*
 failures produced; nothing is uploaded until the consent box is ticked and
 **Kirim ke KIRI Engine** is pressed.*
 
+![The chair explorer, a single-file viewer](assets/kiri-explore.png)
+
+*A one-file explorer for the same GLB: orbit, normals, wireframe, exposure and a
+PNG export. [explore/chair-explore.html](explore/chair-explore.html) opens by
+double-click — Three.js and the model are inlined, so it needs no server, no
+network and no key. The normals view is how the hole was proven to be absent
+surface rather than bad shading.*
+
 The older featureless-mesh chair stays in
 [assets/kiri-mesh-chair.png](assets/kiri-mesh-chair.png) and
 [assets/kiri-mesh-viewer.png](assets/kiri-mesh-viewer.png) for provenance: it
