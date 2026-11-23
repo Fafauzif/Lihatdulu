@@ -57,6 +57,7 @@ next action.
 | Narrow phone | `node var/release/tools/polish-check.mjs` | 360 px: 0 px horizontal overflow, primary buttons 50×270 |
 | Camera denied | same harness, no fake-UI flag | refusal explained in Indonesian; file picker and native-camera fallback both stay visible |
 | Desktop keyboard | same harness | 12 tabs to **Rekam dengan kamera**, 3 px solid focus ring |
+| Static host without the API | built `dist` served by `vite preview`, no `/api` | page renders, banner says *Server pindai belum bisa dihubungi…*, submit disabled, no page errors; `/pindai/demo-chair` still opens the saved chair |
 
 Screenshot set (local, `var/release/shots`): `before_390_jual_pindai.png`,
 `before_1440_jual_pindai.png`, `360_jual_pindai.png`, `390_denied.png`,
