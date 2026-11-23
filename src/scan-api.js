@@ -44,6 +44,9 @@ export const ERROR_COPY = Object.freeze({
   video_not_mp4: "Berkas ini bukan MP4. Pilih video MP4 dari galeri.",
   video_unreadable: "Video ini tidak bisa dibaca browser. Coba MP4 lain.",
   upload_empty: "Berkas video kosong. Pilih video lain.",
+  photos_too_few:
+    "Kirim minimal 20 foto. KIRI meminta 20 sampai 300 sudut untuk menyusun bentuk.",
+  photos_invalid: "Berkas ZIP hanya boleh berisi foto JPG atau PNG.",
   missing_key: "Server demo belum diberi kunci KIRI. Hubungi operator.",
   kiri_unauthorized: "Kunci KIRI ditolak. Operator perlu memeriksa KIRI_API_KEY.",
   kiri_no_credit: "Kredit KIRI Engine habis. Operator perlu menambah kredit.",
@@ -103,6 +106,19 @@ export const PREVIEW_COPY = Object.freeze({
   modelNote:
     "Model 3D ini berasal dari video yang diproses KIRI Engine, bukan contoh Sora.",
   hint: "Tarik untuk memutar · cubit untuk memperbesar",
+  // Source tabs on the result page: the refined preview, KIRI's own mesh, the
+  // seller's stills. The refined one is always labelled as an estimate.
+  tabRefined: "Hasil halus",
+  tabRaw: "Pindaian asli",
+  tabSplat: "Pindaian asli",
+  tabPhotos: "Foto asli",
+  // Exactly this sentence must be shown for inferred geometry.
+  inferred: "Pratinjau 3D perkiraan. Cek foto asli untuk kondisi barang.",
+  photosHeading: "Foto asli dari penjual",
+  photosNote:
+    "Foto ini yang dilihat KIRI. Bandingkan dengan model: warna, tekstur, dan lubang asli paling jelas di sini.",
+  photosCaveat: "Tampilan foto, bukan model 3D.",
+  refine: "Coba haluskan lagi",
   // Measured, not boilerplate: the knit backrest and the glossy base are the two
   // parts KIRI lost on every route, and both are visible in this viewer.
   caveat:
@@ -263,6 +279,20 @@ export async function getJob(id, { signal } = {}) {
     });
   } catch (error) {
     if (error?.name === "AbortError") throw error;
+    throw new ScanApiError("network", ERROR_COPY.network);
+  }
+  if (!response.ok) throw await parseError(response);
+  return response.json();
+}
+
+export async function refineJob(id) {
+  let response;
+  try {
+    response = await fetch(`/api/kiri/jobs/${encodeURIComponent(id)}/refine`, {
+      method: "POST",
+      headers: { accept: "application/json" },
+    });
+  } catch {
     throw new ScanApiError("network", ERROR_COPY.network);
   }
   if (!response.ok) throw await parseError(response);

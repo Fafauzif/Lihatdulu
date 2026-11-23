@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KiriError, errorPayload, redact } from "./kiri-errors.mjs";
+import { listZipEntries, readZipEntry } from "./zip.mjs";
 import {
   defaultEnvFile,
   loadDotEnv,
@@ -54,6 +55,12 @@ export function sanitizeFilename(value) {
   return /\.mp4$/i.test(name) ? name : `${name.replace(/\.[A-Za-z0-9]{1,8}$/, "")}.mp4`;
 }
 
+export function sanitizePhotoSetName(value) {
+  const name = basename(String(value || "foto").replace(/[/\\]/g, " ")).trim();
+  const clean = name.slice(0, MAX_FILENAME) || "foto";
+  return /\.[A-Za-z0-9]{1,8}$/.test(clean) ? clean : `${clean}.zip`;
+}
+
 export function decodeFilename(header) {
   if (!header) return "";
   try {
@@ -69,6 +76,21 @@ export function isMp4Header(head) {
     head.length >= 12 &&
     head.toString("latin1", 4, 8) === "ftyp"
   );
+}
+
+// Seller-provided measurements, never inferred from the mesh. The header is
+// "length,width,height" in centimetres; anything outside a plausible furniture
+// range is ignored instead of trusted.
+export function parseDimensions(header) {
+  if (!header) return null;
+  const parts = String(header)
+    .split(/[,x×\s]+/)
+    .map((value) => Number(value.replace(",", ".")));
+  if (parts.length !== 3) return null;
+  if (parts.some((value) => !Number.isFinite(value) || value <= 1 || value >= 1000))
+    return null;
+  const [length, width, height] = parts.map((value) => Math.round(value * 10) / 10);
+  return { length, width, height, unit: "cm" };
 }
 
 function sendJson(res, status, payload) {
@@ -105,6 +127,10 @@ function methodNotAllowed(res, allowed) {
       },
     }),
   );
+}
+
+async function readFileBuffer(path) {
+  return readFile(path);
 }
 
 async function receiveUpload(req, destination, maxBytes) {
@@ -147,26 +173,77 @@ async function receiveUpload(req, destination, maxBytes) {
 // A job owns exactly one artifact, in the format KIRI produced: SPZ for splats,
 // GLB for a featureless mesh. Asking for the other extension is a 404, so a
 // stale link can never stream the wrong bytes with the wrong content type.
-async function serveArtifact(req, res, config, id, requested = "spz") {
+// `result.glb` is the preview the pipeline stands behind (refined when that
+// pass applied, KIRI's own export otherwise); `raw.glb` is always KIRI's file.
+async function serveArtifact(req, res, config, id, requested = "spz", { raw = false } = {}) {
   const job = await readJob(config.jobsRoot, id);
   if (!job || !job.artifact) throw new KiriError("not_found");
   const format = job.artifact.format === "glb" ? "glb" : "spz";
   if (requested !== format) throw new KiriError("not_found");
   const paths = jobPaths(config.jobsRoot, id);
-  const file = format === "glb" ? paths.model : paths.artifact;
+  const refinedAvailable = format === "glb" && job.refine?.status === "applied";
+  const file =
+    format === "glb"
+      ? raw || !refinedAvailable
+        ? paths.model
+        : paths.refined
+      : paths.artifact;
   let size;
   try {
     size = (await stat(file)).size;
   } catch {
+    // A refined file can disappear between the record and the request; fall
+    // back to the raw scan rather than 404 the whole preview.
+    if (format === "glb" && file === paths.refined) {
+      return serveArtifact(req, res, config, id, requested, { raw: true });
+    }
     throw new KiriError(format === "glb" ? "model_invalid" : "spz_invalid", {
       detail: format === "glb" ? "Berkas GLB hilang." : "Berkas SPZ hilang.",
     });
   }
+  // Label the bytes, not the route: an unrefined `/result.glb` is the raw scan.
+  const served =
+    format !== "glb" ? "model" : file === paths.refined ? "refined" : "raw";
   res.writeHead(200, {
     "content-type":
       format === "glb" ? "model/gltf-binary" : "application/octet-stream",
     "content-length": size,
-    "content-disposition": `inline; filename="pindai-${id}.${format}"`,
+    "content-disposition": `inline; filename="pindai-${id}${served === "refined" ? "-halus" : ""}.${format}"`,
+    "cache-control": "private, max-age=31536000, immutable",
+    "x-content-type-options": "nosniff",
+    "x-scan-artifact": served,
+  });
+  if (req.method === "HEAD") {
+    res.end();
+    return;
+  }
+  createReadStream(file).pipe(res);
+}
+
+const PHOTO_MIME = Object.freeze({
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+});
+
+// The seller's own stills. They are the fallback when neither model is usable,
+// so they are served from the job folder, never from a temp directory.
+async function servePhoto(req, res, config, id, index) {
+  const job = await readJob(config.jobsRoot, id);
+  if (!job || !Array.isArray(job.photos)) throw new KiriError("not_found");
+  const photo = job.photos[index];
+  if (!photo) throw new KiriError("not_found");
+  const file = join(jobPaths(config.jobsRoot, id).photosDir, basename(photo.file));
+  let size;
+  try {
+    size = (await stat(file)).size;
+  } catch {
+    throw new KiriError("not_found");
+  }
+  res.writeHead(200, {
+    "content-type": PHOTO_MIME[extname(file).toLowerCase()] ?? "application/octet-stream",
+    "content-length": size,
     "cache-control": "private, max-age=31536000, immutable",
     "x-content-type-options": "nosniff",
   });
@@ -175,6 +252,41 @@ async function serveArtifact(req, res, config, id, requested = "spz") {
     return;
   }
   createReadStream(file).pipe(res);
+}
+
+// A photoset arrives as a ZIP of JPG/PNG stills: no FFmpeg, no multipart parser,
+// and the same size ceiling as a clip. Entries are validated before anything is
+// written, so a hostile archive cannot land outside the temp folder.
+async function receivePhotos(zip, directory, limits) {
+  const entries = listZipEntries(zip).filter(
+    (entry) =>
+      !entry.directory &&
+      !/(^|\/)__MACOSX\//.test(entry.name) &&
+      /\.(jpe?g|png)$/i.test(entry.name),
+  );
+  if (!entries.length) throw new KiriError("photos_invalid");
+  if (entries.some((entry) => entry.uncompressedSize > limits.maxPhotoBytes))
+    throw new KiriError("artifact_too_large", {
+      detail: "Satu foto melebihi batas ukuran.",
+    });
+  const picked = entries
+    .sort((left, right) => left.name.localeCompare(right.name, "en", { numeric: true }))
+    .slice(0, limits.maxPhotoCount);
+  if (picked.length < limits.minPhotoCount)
+    throw new KiriError("photos_too_few", {
+      detail: `hanya ${picked.length} foto`,
+    });
+  await mkdir(directory, { recursive: true });
+  const files = [];
+  for (let index = 0; index < picked.length; index += 1) {
+    const data = readZipEntry(zip, picked[index]);
+    const extension = /\.png$/i.test(picked[index].name) ? "png" : "jpg";
+    const filename = `${String(index + 1).padStart(3, "0")}.${extension}`;
+    const path = join(directory, filename);
+    await writeFile(path, data);
+    files.push({ path, filename: basename(picked[index].name) });
+  }
+  return files;
 }
 
 async function serveStatic(req, res, config, pathname) {
@@ -237,6 +349,17 @@ export function createKiriServer({
         return;
       }
 
+      // Read-only credit probe: an integer and the mode, never the key. The
+      // seller UI stays quiet about it; operators and runbooks use it to avoid
+      // submitting a paid job on an empty balance.
+      if (pathname === "/api/kiri/balance") {
+        if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);
+        if (config.mode === "unconfigured") throw new KiriError("missing_key");
+        const balance = await service.balance();
+        sendJson(res, 200, { mode: config.mode, balance });
+        return;
+      }
+
       if (pathname === "/api/kiri/jobs") {
         if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
         if (config.mode === "unconfigured") {
@@ -263,12 +386,60 @@ export function createKiriServer({
         return;
       }
 
+      if (pathname === "/api/kiri/jobs/photos") {
+        if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
+        if (config.mode === "unconfigured") {
+          req.resume();
+          throw new KiriError("missing_key");
+        }
+        const uploadStarted = now();
+        const temp = join(tempDir, `${randomUUID()}.zip`);
+        await mkdir(tempDir, { recursive: true });
+        const received = await receiveUpload(req, temp, config.limits.maxUploadBytes);
+        if (!received.bytes) throw new KiriError("upload_empty");
+        const photosDir = join(tempDir, `${randomUUID()}-photos`);
+        try {
+          const zip = await readFileBuffer(temp);
+          const files = await receivePhotos(zip, photosDir, config.limits);
+          const result = await service.submitPhotos({
+            files,
+            bytes: received.bytes,
+            videoHash: received.hash,
+            filename: sanitizePhotoSetName(decodeFilename(req.headers["x-file-name"])),
+            dimensions: parseDimensions(decodeFilename(req.headers["x-dimensions"])),
+            uploadMs: now() - uploadStarted,
+          });
+          sendJson(res, result.deduplicated ? 200 : 201, {
+            ...service.dto(result.job),
+            deduplicated: result.deduplicated === true,
+          });
+        } finally {
+          await rm(photosDir, { recursive: true, force: true }).catch(() => {});
+          await rm(temp, { force: true }).catch(() => {});
+        }
+        return;
+      }
+
       const jobMatch =
-        /^\/api\/kiri\/jobs\/([^/]+)(\/retry|\/result\.(?:spz|glb))?$/.exec(pathname);
+        /^\/api\/kiri\/jobs\/([^/]+)(\/retry|\/refine|\/raw\.glb|\/result\.(?:spz|glb)|\/photos\/(\d+))?$/.exec(
+          pathname,
+        );
       if (jobMatch) {
         const id = jobMatch[1];
         const suffix = jobMatch[2] ?? "";
         if (!isJobId(id)) throw new KiriError("not_found");
+        if (suffix.startsWith("/photos/")) {
+          if (!["GET", "HEAD"].includes(req.method))
+            return methodNotAllowed(res, ["GET", "HEAD"]);
+          await servePhoto(req, res, config, id, Math.max(0, Number(jobMatch[3]) - 1));
+          return;
+        }
+        if (suffix === "/raw.glb") {
+          if (!["GET", "HEAD"].includes(req.method))
+            return methodNotAllowed(res, ["GET", "HEAD"]);
+          await serveArtifact(req, res, config, id, "glb", { raw: true });
+          return;
+        }
         if (suffix.startsWith("/result.")) {
           if (!["GET", "HEAD"].includes(req.method))
             return methodNotAllowed(res, ["GET", "HEAD"]);
@@ -279,6 +450,12 @@ export function createKiriServer({
           if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
           const job = await service.retry(id);
           sendJson(res, 202, service.dto(job));
+          return;
+        }
+        if (suffix === "/refine") {
+          if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
+          const job = await service.refine(id);
+          sendJson(res, 200, service.dto(job));
           return;
         }
         if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);

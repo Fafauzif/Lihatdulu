@@ -253,6 +253,19 @@ export function createKiriClient({
       };
     },
 
+    // Read-only credit check (docs: GET /v1/open/balance). Every submission
+    // costs one credit even when KIRI then fails the reconstruction, so the
+    // server asks before it spends and refuses to submit on an empty balance.
+    async getBalance() {
+      const payload = await request("/v1/open/balance");
+      const balance = Number(payload?.data?.balance);
+      if (!Number.isInteger(balance) || balance < 0)
+        throw new KiriError("kiri_unavailable", {
+          detail: "Saldo KIRI tidak terbaca.",
+        });
+      return { balance };
+    },
+
     async getStatus(serial) {
       const payload = await request(
         `/v1/open/model/getStatus?serialize=${encodeURIComponent(assertSerial(serial))}`,

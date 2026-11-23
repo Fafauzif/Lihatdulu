@@ -132,11 +132,18 @@ export function renderScanPreview() {
     </header>
     <div class="scan-preview-grid">
       <div class="scan-preview-main">
+        <div class="scan-source-tabs" data-scan-tabs role="tablist" aria-label="Sumber pratinjau" hidden></div>
         <div class="scan-viewer" data-scan-viewer data-state="idle">
           <p class="scan-viewer-placeholder" data-scan-viewer-placeholder>Menunggu model siap…</p>
         </div>
-        <p class="scan-viewer-hint-line">${PREVIEW_COPY.hint}</p>
+        <p class="scan-viewer-hint-line" data-scan-hint>${PREVIEW_COPY.hint}</p>
         <p class="scan-viewer-caveat" data-scan-caveat>${PREVIEW_COPY.caveat}</p>
+        <p class="scan-refine-note" data-scan-refine-note hidden></p>
+        <section class="scan-photos" data-scan-photos hidden>
+          <h2>${PREVIEW_COPY.photosHeading}</h2>
+          <p class="scan-photos-note">${PREVIEW_COPY.photosNote}</p>
+          <ul class="scan-photo-grid" data-scan-photo-grid></ul>
+        </section>
       </div>
       <aside class="scan-preview-side">
         <section class="scan-card" data-scan-status>
@@ -156,12 +163,109 @@ export function renderScanPreview() {
           </div>
         </section>
         <div class="scan-preview-actions">
+          <button type="button" class="scan-link-button" data-scan-refine hidden>${PREVIEW_COPY.refine}</button>
           <a class="scan-link-button primary" href="/jual/pindai" data-nav>${PREVIEW_COPY.retake}</a>
           <a class="scan-link-button" href="/beli" data-nav>${PREVIEW_COPY.catalog}</a>
         </div>
       </aside>
     </div>
   </section>`;
+}
+
+// Which previews a buyer may open, best first. Pure so the tabs, the tests and
+// the "why is this hidden" reasoning all read the same list.
+export function sourceOptions(dto) {
+  if (!dto || dto.stage !== "ready") return [];
+  const options = [];
+  const glb = dto.artifact?.format === "glb";
+  if (glb && dto.artifact?.refined)
+    options.push({
+      id: "refined",
+      label: PREVIEW_COPY.tabRefined,
+      url: dto.artifact.url,
+      format: "glb",
+      caveat: PREVIEW_COPY.inferred,
+    });
+  if (glb)
+    options.push({
+      id: "raw",
+      label: PREVIEW_COPY.tabRaw,
+      url: dto.artifact?.raw?.url ?? dto.artifact.url,
+      format: "glb",
+      caveat: PREVIEW_COPY.caveat,
+    });
+  else if (dto.artifact?.url)
+    options.push({
+      id: "raw",
+      label: PREVIEW_COPY.tabSplat,
+      url: dto.artifact.url,
+      format: "spz",
+      caveat: PREVIEW_COPY.caveat,
+    });
+  if ((dto.photos ?? []).length)
+    options.push({
+      id: "photos",
+      label: PREVIEW_COPY.tabPhotos,
+      url: null,
+      format: null,
+      caveat: PREVIEW_COPY.photosCaveat,
+    });
+  return options;
+}
+
+// 0.187566 reads as "18,8%" in Indonesian. One decimal is enough: the number
+// is a share of a silhouette, not a measurement of the object.
+export function holeShare(ratio) {
+  const value = Number(ratio);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return `${(value * 100).toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`;
+}
+
+// The refinement is a second stage that can be skipped or fail without losing
+// the scan, so its state gets one honest sentence, not a stack trace. When the
+// mesh still sees through itself, the sentence says so instead of implying a
+// closed surface: those holes are usually real openings in the product.
+export function refineNote(dto) {
+  const refine = dto?.refine;
+  if (!refine) return "";
+  if (refine.status === "applied") {
+    const metrics = refine.metrics ?? {};
+    const parts = [];
+    if (metrics.fragmentsRemoved)
+      parts.push(`${metrics.fragmentsRemoved} pecahan dibuang`);
+    if (metrics.gapsFilled) parts.push(`${metrics.gapsFilled} celah kecil ditutup`);
+    if (!parts.length) parts.push("geometri dirapikan");
+    const before = Number(metrics.trianglesBefore ?? 0);
+    const after = Number(metrics.trianglesAfter ?? 0);
+    const geometry =
+      before && after
+        ? ` · ${before.toLocaleString("id-ID")} → ${after.toLocaleString("id-ID")} segitiga`
+        : "";
+    const share = holeShare(metrics.coverage?.holeRatioAfter);
+    const seeThrough =
+      metrics.coverage?.verdict === "berlubang" && share
+        ? ` Masih ${share} siluet yang tembus pandang; bagian itu tidak ditambal karena seringkali memang bolong pada barangnya.`
+        : "";
+    return `Penyempurnaan lokal: ${parts.join(", ")}${geometry}.${seeThrough}`;
+  }
+  if (refine.status === "failed")
+    return "Penyempurnaan lokal gagal. Pindaian asli tetap tersedia, dan tahap ini bisa dicoba lagi tanpa memakai kredit.";
+  if (refine.status === "skipped")
+    return "Penyempurnaan lokal dilewati: bentuk mesh ini belum bisa dirapikan dengan aman. Pindaian asli ditampilkan apa adanya.";
+  if (refine.status === "disabled")
+    return "Penyempurnaan lokal dimatikan di server ini. Pindaian asli ditampilkan apa adanya.";
+  return "";
+}
+
+export function dimensionRows(dimensions) {
+  if (!dimensions) return [];
+  const unit = dimensions.unit === "cm" ? "cm" : dimensions.unit ?? "";
+  return [
+    [
+      "Ukuran dari penjual",
+      `${dimensions.length} × ${dimensions.width} × ${dimensions.height} ${unit}`.trim(),
+    ],
+  ];
 }
 
 // KIRI's modelQuality is a number in the API and a promise to the seller. Name
@@ -174,9 +278,12 @@ export function detailRows(dto) {
   // Say how the model was actually built: a photoset sampled from the clip is
   // a different promise from sending the clip itself.
   const quality = MODEL_QUALITY[dto.input?.modelQuality] ?? MODEL_QUALITY[0];
+  const photoset = dto.input?.source === "photos";
   const source = dto.mock
     ? "Mode simulasi · dibuat lokal, bukan dari KIRI"
-    : dto.input?.mode === "mesh"
+    : photoset
+      ? `KIRI Engine · Photo Scan ${quality}, masking otomatis, ${dto.input?.photos ?? 0} foto pilihan penjual`
+      : dto.input?.mode === "mesh"
       ? `KIRI Engine · mesh objek (featureless), ${dto.input.photos} foto dari video`
       : dto.input?.mode === "photo"
         ? `KIRI Engine · Photo Scan ${quality}, masking otomatis, ${dto.input.photos} foto dari video`
@@ -188,9 +295,10 @@ export function detailRows(dto) {
   const rows = [
     ["Sumber", source],
     [
-      "Berkas video",
+      photoset ? "Berkas foto" : "Berkas video",
       [dto.source?.filename, formatBytes(dto.source?.bytes)].filter(Boolean).join(" · "),
     ],
+    ...dimensionRows(dto.source?.dimensions),
   ];
   if (dto.kiri?.serial)
     rows.push([
@@ -209,6 +317,25 @@ export function detailRows(dto) {
       rows.push(["Ukuran SPZ", formatBytes(dto.artifact.bytes)]);
     }
   }
+  if (dto.refine?.status === "applied" && dto.refine.metrics) {
+    const metrics = dto.refine.metrics;
+    rows.push([
+      "Penyempurnaan",
+      [
+        metrics.trianglesBefore && metrics.trianglesAfter
+          ? `${Number(metrics.trianglesBefore).toLocaleString("id-ID")} → ${Number(metrics.trianglesAfter).toLocaleString("id-ID")} segitiga`
+          : null,
+        metrics.fragmentsRemoved
+          ? `${metrics.fragmentsRemoved} pecahan dibuang`
+          : null,
+        metrics.gapsFilled ? `${metrics.gapsFilled} celah ditutup` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "diterapkan",
+    ]);
+  }
+  if ((dto.photos ?? []).length)
+    rows.push(["Foto asli", `${dto.photos.length} foto disimpan`]);
   if (dto.timings?.totalMs)
     rows.push(["Waktu total", formatDuration(Math.round(dto.timings.totalMs / 1000))]);
   rows.push(["Selesai", formatDateTime(dto.completedAt)]);

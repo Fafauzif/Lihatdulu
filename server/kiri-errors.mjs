@@ -12,6 +12,14 @@ const DEFINITIONS = {
     copy: "Berkas ini bukan MP4. Pilih video MP4 dari galeri.",
   },
   upload_empty: { status: 400, copy: "Berkas video kosong. Pilih video lain." },
+  photos_too_few: {
+    status: 400,
+    copy: "Kirim minimal 20 foto. KIRI meminta 20 sampai 300 sudut untuk menyusun bentuk.",
+  },
+  photos_invalid: {
+    status: 415,
+    copy: "Berkas ZIP hanya boleh berisi foto JPG atau PNG.",
+  },
   missing_key: {
     status: 503,
     copy: "Server belum punya kunci KIRI. Hubungi operator demo.",

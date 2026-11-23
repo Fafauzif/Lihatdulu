@@ -42,7 +42,11 @@ export function jobPaths(jobsRoot, id) {
     source: join(dir, "source.mp4"),
     zip: join(dir, "result.zip"),
     ply: join(dir, "result.ply"),
+    // result.glb is KIRI's own export and is never rewritten. refined.glb is
+    // this app's separate candidate, written beside it.
     model: join(dir, "result.glb"),
+    refined: join(dir, "refined.glb"),
+    photosDir: join(dir, "photos"),
     artifact: join(dir, "result.spz"),
   };
 }
@@ -83,7 +87,7 @@ async function writeRecord(jobsRoot, job) {
   await replaceFile(temporary, paths.record);
 }
 
-export function newJobRecord({ videoHash, filename, bytes, provider }) {
+export function newJobRecord({ videoHash, filename, bytes, provider, dimensions = null, kind = "video" }) {
   const now = new Date().toISOString();
   return {
     schema: 1,
@@ -94,11 +98,13 @@ export function newJobRecord({ videoHash, filename, bytes, provider }) {
     completedAt: null,
     stage: "uploading",
     provider,
-    source: { filename, bytes },
+    source: { filename, bytes, kind, dimensions, photos: 0 },
     kiri: { serial: null, status: null, statusRaw: null },
     attempts: { submit: 0, poll: 0, finalize: 0 },
     timings: {},
     artifact: null,
+    photos: [],
+    refine: null,
     error: null,
   };
 }
@@ -182,10 +188,57 @@ export function artifactFile(format) {
   return format === "glb" ? "result.glb" : "result.spz";
 }
 
+export function rawArtifactUrl(id) {
+  return `/api/kiri/jobs/${id}/raw.glb`;
+}
+
+export function photoUrl(id, index) {
+  return `/api/kiri/jobs/${id}/photos/${index + 1}`;
+}
+
+// Only the numbers a buyer can act on. The loop-by-loop geometry stays in
+// job.json: it is evidence for the operator, not a product fact.
+export function refineSummary(refine) {
+  if (!refine) return null;
+  const metrics = refine.metrics ?? null;
+  return {
+    status: refine.status ?? "unknown",
+    reason: refine.reason ?? null,
+    ms: refine.ms ?? null,
+    metrics: metrics
+      ? {
+          trianglesBefore: metrics.trianglesBefore ?? null,
+          trianglesAfter: metrics.trianglesAfter ?? null,
+          fragmentsRemoved: metrics.fragmentsRemoved ?? null,
+          fragmentTrianglesRemoved: metrics.fragmentTrianglesRemoved ?? null,
+          boundaryLoops: metrics.boundaryLoops ?? null,
+          loopsKept: metrics.loopsKept ?? metrics.openingsKept ?? null,
+          gapsFilled: metrics.gapsFilled ?? null,
+          gapTrianglesAdded: metrics.gapTrianglesAdded ?? null,
+          scale: metrics.scale ?? null,
+          targetSize: metrics.targetSize ?? null,
+          // How much of the silhouette still sees through the mesh, measured on
+          // three axes. This is the one number that keeps the refined tab from
+          // promising a closed surface the scan never had.
+          coverage: metrics.coverage
+            ? {
+                verdict: metrics.coverage.verdict ?? null,
+                holeRatioBefore: metrics.coverage.holeRatioBefore ?? null,
+                holeRatioAfter: metrics.coverage.holeRatioAfter ?? null,
+                worstAxis: metrics.coverage.worstAxis ?? null,
+              }
+            : null,
+        }
+      : null,
+  };
+}
+
 // The DTO is everything the browser may know. The API key, the local paths and
 // the video hash stay on the server.
 export function toJobDto(job, { mock = false, now = Date.now(), ttlMs = 0 } = {}) {
   const createdAt = new Date(job.createdAt).getTime();
+  const format = job.artifact?.format === "glb" ? "glb" : "spz";
+  const refined = format === "glb" && job.refine?.status === "applied";
   return {
     id: job.id,
     stage: job.stage,
@@ -198,6 +251,11 @@ export function toJobDto(job, { mock = false, now = Date.now(), ttlMs = 0 } = {}
     source: {
       filename: job.source?.filename ?? null,
       bytes: job.source?.bytes ?? 0,
+      kind: job.source?.kind ?? "video",
+      // Seller-provided measurements, in centimetres. The model itself is only
+      // ever a preview, so its dimensions are never inferred from the mesh.
+      dimensions: job.source?.dimensions ?? null,
+      photos: job.source?.photos ?? job.photos?.length ?? 0,
     },
     // How the model was built: the clip itself or stills sampled from it.
     input: job.input ?? null,
@@ -210,6 +268,7 @@ export function toJobDto(job, { mock = false, now = Date.now(), ttlMs = 0 } = {}
       submitMs: job.timings?.submitMs ?? null,
       queueMs: job.timings?.queueMs ?? null,
       finalizeMs: job.timings?.finalizeMs ?? null,
+      refineMs: job.timings?.refineMs ?? null,
       totalMs:
         job.completedAt && job.createdAt
           ? new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()
@@ -217,13 +276,30 @@ export function toJobDto(job, { mock = false, now = Date.now(), ttlMs = 0 } = {}
     },
     artifact: job.artifact
       ? {
-          format: job.artifact.format,
-          bytes: job.artifact.bytes,
+          format,
+          bytes: (refined ? job.refined?.bytes : null) ?? job.artifact.bytes,
           splatCount: job.artifact.splatCount ?? null,
-          triangles: job.artifact.triangles ?? null,
-          url: artifactUrl(job.id, job.artifact.format),
+          triangles:
+            (refined ? job.refined?.triangles : null) ?? job.artifact.triangles ?? null,
+          url: artifactUrl(job.id, format),
+          refined: refined || false,
+          raw:
+            format === "glb"
+              ? {
+                  bytes: job.artifact.bytes,
+                  triangles: job.artifact.triangles ?? null,
+                  url: rawArtifactUrl(job.id),
+                }
+              : null,
         }
       : null,
+    // The seller's own photos, kept so the buyer can check the item itself when
+    // no model is good enough.
+    photos: (job.photos ?? []).map((photo, index) => ({
+      url: photoUrl(job.id, index),
+      bytes: photo.bytes ?? 0,
+    })),
+    refine: refineSummary(job.refine),
     error: job.error
       ? {
           code: job.error.code,

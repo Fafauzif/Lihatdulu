@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { REFINE_DEFAULTS } from "./kiri-refine.mjs";
 
 // KIRI_API_KEY is the only secret. It is read once from the environment (or a
 // local .env) and never returned by an endpoint, written to a job record or
@@ -20,6 +21,14 @@ export const DEFAULTS = Object.freeze({
   // ceiling than the splat artifact.
   maxModelBytes: 240 * 1024 * 1024,
   maxSplats: 2_500_000,
+  // A seller can also send stills: a ZIP of 8–300 photos bypasses FFmpeg and
+  // goes straight to the Photo Scan route.
+  maxPhotoCount: 300,
+  // KIRI's Photo Scan endpoint documents 20-300 images. A lower local floor
+  // would spend a credit on a set KIRI is going to reject.
+  minPhotoCount: 20,
+  maxPhotoBytes: 16 * 1024 * 1024,
+  keptStills: 8,
   pollMinMs: 5_000,
   pollMaxMs: 30_000,
   jobTtlMs: 3 * 24 * 60 * 60 * 1000,
@@ -83,6 +92,35 @@ export function inputMode(value) {
   return INPUT_MODES.has(text) ? text : DEFAULTS.inputMode;
 }
 
+// Every knob is overridable so an experiment can be replayed from an env line,
+// but the defaults are the shipped profile: fragments under 6% of the body go,
+// only cracks under 5% of the diagonal are closed, and the subject is centred
+// and scaled into a 1 m frame.
+export function refineSettings(env = {}) {
+  return {
+    enabled: flag(env.KIRI_REFINE, true),
+    minFragmentTriangles: positive(
+      env.KIRI_REFINE_MIN_FRAGMENT_TRIANGLES,
+      REFINE_DEFAULTS.minFragmentTriangles,
+    ),
+    minFragmentRatio: positive(
+      env.KIRI_REFINE_MIN_FRAGMENT_RATIO,
+      REFINE_DEFAULTS.minFragmentRatio,
+    ),
+    gapMaxRatio: positive(env.KIRI_REFINE_GAP_MAX_RATIO, REFINE_DEFAULTS.gapMaxRatio),
+    gapMaxVertices: positive(
+      env.KIRI_REFINE_GAP_MAX_VERTICES,
+      REFINE_DEFAULTS.gapMaxVertices,
+    ),
+    fillMaxNormalDeg: positive(
+      env.KIRI_REFINE_FILL_MAX_NORMAL_DEG,
+      REFINE_DEFAULTS.fillMaxNormalDeg,
+    ),
+    weldEpsilon: positive(env.KIRI_REFINE_WELD_EPSILON, REFINE_DEFAULTS.weldEpsilon),
+    targetSize: positive(env.KIRI_REFINE_TARGET_SIZE, REFINE_DEFAULTS.targetSize),
+  };
+}
+
 function cleanBaseUrl(value) {
   return String(value || DEFAULTS.baseUrl).replace(/\/+$/, "");
 }
@@ -139,6 +177,9 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
       ),
       maxModelBytes: positive(env.KIRI_MAX_MODEL_BYTES, DEFAULTS.maxModelBytes),
       maxSplats: positive(env.KIRI_MAX_SPLATS, DEFAULTS.maxSplats),
+      maxPhotoCount: positive(env.KIRI_MAX_PHOTO_COUNT, DEFAULTS.maxPhotoCount),
+      minPhotoCount: positive(env.KIRI_MIN_PHOTO_COUNT, DEFAULTS.minPhotoCount),
+      maxPhotoBytes: positive(env.KIRI_MAX_PHOTO_BYTES, DEFAULTS.maxPhotoBytes),
       maxDurationS: 180,
       maxWidth: 1920,
       maxHeight: 1080,
@@ -190,6 +231,13 @@ export function readKiriConfig(env = process.env, cwd = process.cwd()) {
       mode: String(env.KIRI_CROP || DEFAULTS.cropMode).trim().toLowerCase() === "subject" ? "subject" : "off",
       radius: positive(env.KIRI_CROP_RADIUS, DEFAULTS.cropRadius),
     },
+    // The refinement stage is a separate, retryable pass over the saved GLB. It
+    // never calls KIRI, so a local failure costs nothing and can be retried.
+    refine: refineSettings(env),
+    // Source stills are the seller's photos: the buyer can always fall back to
+    // them when neither model is usable.
+    keepStills: flag(env.KIRI_KEEP_STILLS, true),
+    keptStills: positive(env.KIRI_KEPT_STILLS, DEFAULTS.keptStills),
     port: positive(env.KIRI_PORT, DEFAULTS.port),
     host: env.KIRI_HOST || DEFAULTS.host,
     serveDist: flag(env.KIRI_SERVE_DIST, true),
@@ -216,6 +264,15 @@ export function publicConfig(config) {
     // knobs stay on the server.
     inputMode: config.input?.mode ?? "video",
     artifactKind: config.input ? (MESH_MODES.has(config.input.mode) ? "mesh" : "splat") : "splat",
+    // The browser needs to know whether to promise a refined preview and whether
+    // a photo fallback exists at all.
+    refine: config.refine?.enabled === true,
+    photos: config.keepStills === true,
+    photoLimits: {
+      min: config.limits?.minPhotoCount ?? DEFAULTS.minPhotoCount,
+      max: config.limits?.maxPhotoCount ?? DEFAULTS.maxPhotoCount,
+      maxBytes: config.limits?.maxPhotoBytes ?? DEFAULTS.maxPhotoBytes,
+    },
     poll: { ...config.poll },
   };
 }

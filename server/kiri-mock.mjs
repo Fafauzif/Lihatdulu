@@ -301,6 +301,12 @@ export function createMockClient({
   return {
     provider: PROVIDER,
 
+    // The mock never spends a credit, but it still answers the balance probe so
+    // the submit guard and the /api/kiri/balance route can be exercised.
+    async getBalance() {
+      return { balance: 200 };
+    },
+
     async submitVideo({ filename, jobDir }) {
       if (await shouldFail("submit"))
         throw new KiriError("kiri_unavailable", {

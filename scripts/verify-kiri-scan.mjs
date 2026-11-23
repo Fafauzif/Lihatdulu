@@ -606,6 +606,149 @@ async function layoutFacts(page) {
   await context.close();
 }
 
+// 7. The refined preview: which sources the buyer may open, the stills that
+// shaped the mesh, the retry that never spends a credit, and the narrow layout.
+{
+  await stopServer();
+  await startServer({ input: "photo" });
+  const { context, page } = await newPage();
+  let jobId = null;
+
+  await check("a refined job offers refined, raw and photo tabs", async () => {
+    await open(page, "/jual/pindai");
+    await pickClip(page, meshClip);
+    await submitClip(page);
+    await waitForJobEnd(page);
+    await page.locator("[data-scan-open]").click();
+    await page.waitForURL(/\/pindai\/[0-9a-f-]{36}$/);
+    jobId = page.url().split("/").pop();
+    await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+    const labels = await page.locator("[data-scan-source]").allTextContents();
+    assert.equal(labels.length, 3, `expected three sources, saw ${labels.join(" | ")}`);
+    assert.equal(
+      await page.locator("[data-scan-source='refined']").getAttribute("aria-selected"),
+      "true",
+    );
+    const note = await page.locator("[data-scan-refine-note]").textContent();
+    assert.match(note, /Penyempurnaan lokal/);
+    const caveat = await page.locator("[data-scan-caveat]").textContent();
+    assert.match(caveat, /Pratinjau 3D perkiraan/);
+    await shot(page, "16-refined-sources");
+    return { labels, note, caveat };
+  });
+
+  await check("the raw tab keeps KIRI's untouched file", async () => {
+    const seen = [];
+    page.on("response", (response) => {
+      if (/\/raw\.glb$/.test(response.url())) seen.push(response.status());
+    });
+    await page.locator("[data-scan-source='raw']").click();
+    await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+    await page.waitForFunction(
+      () => document.querySelector("[data-scan-source='raw']").getAttribute("aria-selected") === "true",
+      null,
+      { timeout: 10_000 },
+    );
+    await shot(page, "17-refined-raw-tab");
+    assert.ok(seen.includes(200), `raw.glb responses: ${seen.join(",")}`);
+    return { rawResponses: seen };
+  });
+
+  await check("the photo tab shows the stills and hides the viewer", async () => {
+    await page.locator("[data-scan-source='photos']").click();
+    const panel = page.locator("[data-scan-photos]");
+    await panel.waitFor({ state: "visible" });
+    assert.equal(await page.locator("[data-scan-viewer]").isVisible(), false);
+    const images = page.locator("[data-scan-photo-grid] img");
+    const count = await images.count();
+    assert.ok(count >= 1, "at least one still is offered");
+    const loaded = await page.evaluate(() =>
+      [...document.querySelectorAll("[data-scan-photo-grid] img")].every(
+        (image) => image.complete && image.naturalWidth > 0,
+      ),
+    );
+    assert.ok(loaded, "every still decoded");
+    await shot(page, "18-refined-photos-tab");
+    return { stills: count };
+  });
+
+  await check("a reload resumes the same job and keeps the chosen tabs", async () => {
+    const before = await jobCount();
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator("[data-scan-source]").first().waitFor({ timeout: 30_000 });
+    assert.equal(await jobCount(), before);
+    assert.equal(await page.locator("[data-scan-source]").count(), 3);
+    return { jobs: before };
+  });
+
+  await check("a failed refinement falls back to the raw scan and can be retried", async () => {
+    // The service keeps every record under <jobs root>/jobs/<id>/job.json.
+    const jobFile = path.join(jobsRoot, "jobs", jobId, "job.json");
+    const record = JSON.parse(await fs.readFile(jobFile, "utf8"));
+    const backup = JSON.stringify(record);
+    record.refine = { status: "failed", reason: "model_invalid", ms: 12 };
+    record.refined = null;
+    await fs.writeFile(jobFile, JSON.stringify(record, null, 2));
+    try {
+      await page.reload({ waitUntil: "networkidle" });
+      const note = page.locator("[data-scan-refine-note]");
+      await note.waitFor({ state: "visible", timeout: 30_000 });
+      const text = await note.textContent();
+      assert.match(text, /gagal/);
+      const labels = await page.locator("[data-scan-source]").allTextContents();
+      assert.equal(labels.length, 2, `a failed refine leaves raw and photos: ${labels.join(" | ")}`);
+      assert.equal(
+        await page.locator("[data-scan-source='raw']").getAttribute("aria-selected"),
+        "true",
+      );
+      const button = page.locator("[data-scan-refine]");
+      await button.waitFor({ state: "visible" });
+      const before = await jobCount();
+      await button.click();
+      // The failed note also starts with "Penyempurnaan lokal", so wait for the
+      // applied line ("Penyempurnaan lokal: …") and for the retry button, which
+      // only hides once the stage has applied, to disappear.
+      await page.waitForFunction(
+        () => /Penyempurnaan lokal: /.test(document.querySelector("[data-scan-refine-note]")?.textContent ?? ""),
+        null,
+        { timeout: 60_000 },
+      );
+      await page.locator("[data-scan-refine]").waitFor({ state: "hidden", timeout: 30_000 });
+      assert.equal(await jobCount(), before, "a retry must not create a job");
+      assert.equal(await page.locator("[data-scan-source]").count(), 3);
+      await shot(page, "19-refine-retry");
+      return { failedNote: text, sources: labels.length };
+    } finally {
+      await fs.writeFile(jobFile, backup);
+    }
+  });
+
+  await check("the refined result reads well at 390x844", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+    const facts = await layoutFacts(page);
+    assert.equal(facts.clipped.length, 0, `clipped: ${JSON.stringify(facts.clipped)}`);
+    assert.ok(facts.scrollWidth <= facts.width + 1, "no horizontal scroll");
+    const tabsFit = await page.evaluate(() =>
+      [...document.querySelectorAll("[data-scan-source]")].every((element) => {
+        const box = element.getBoundingClientRect();
+        return box.left >= -1 && box.right <= innerWidth + 1 && box.height >= 32;
+      }),
+    );
+    assert.ok(tabsFit, "every source tab fits and stays tappable");
+    await shot(page, "20-refined-mobile");
+    return { width: facts.width, scrollWidth: facts.scrollWidth };
+  });
+
+  await check("the refined flow raised no page errors or failed responses", async () => {
+    assert.deepEqual(report.pageErrors, []);
+    assert.deepEqual(report.failedResponses, []);
+    return { pageErrors: 0, failedResponses: 0 };
+  });
+  await context.close();
+}
+
 await browser.close();
 await stopServer();
 report.finished = new Date().toISOString();

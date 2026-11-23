@@ -1,4 +1,4 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   convertPlyToSpz as defaultConvert,
@@ -19,6 +19,7 @@ import {
   stripBackdrop as defaultStripBackdrop,
 } from "./kiri-cleanup.mjs";
 import { createFrameExtractor } from "./kiri-frames.mjs";
+import { refineGlb as defaultRefineGlb } from "./kiri-refine.mjs";
 import { KiriError, toKiriError } from "./kiri-errors.mjs";
 import {
   findReusableByHash,
@@ -61,6 +62,7 @@ export function createKiriService({
   validatePly = defaultValidatePly,
   validateSpz = defaultValidateSpz,
   validateGlb = defaultValidateGlb,
+  refineGlb = defaultRefineGlb,
   readFileImpl = readFile,
   frames = createFrameExtractor(),
   log = () => {},
@@ -106,6 +108,126 @@ export function createKiriService({
       error: errorPatch(kiriError, job),
       completedAt: new Date(now()).toISOString(),
     });
+  }
+
+  // The seller's stills are the honest fallback when no model is usable, so the
+  // frames that shaped the model are copied aside before the working folder is
+  // deleted. Even spacing covers the whole orbit instead of the first second.
+  async function saveStills(stills, paths) {
+    const limit = Math.max(1, Math.min(config.keptStills ?? 8, stills.length));
+    const step = Math.max(1, Math.floor(stills.length / limit));
+    await mkdir(paths.photosDir, { recursive: true });
+    const saved = [];
+    for (
+      let index = 0;
+      index < stills.length && saved.length < limit;
+      index += step
+    ) {
+      const still = stills[index];
+      const extension = /\.png$/i.test(still.filename ?? "") ? "png" : "jpg";
+      const file = `photo-${saved.length + 1}.${extension}`;
+      const destination = join(paths.photosDir, file);
+      await copyFile(still.path, destination);
+      const info = await stat(destination).catch(() => null);
+      saved.push({ file, bytes: info?.size ?? 0 });
+    }
+    return saved;
+  }
+
+  // Refinement is a second, local stage over the GLB KIRI already returned. It
+  // never touches KIRI, so it can be retried for free and its failure must not
+  // take the raw scan down with it.
+  async function applyRefine(job, paths) {
+    const settings = config.refine ?? {};
+    if (job.artifact?.format !== "glb") {
+      return updateJob(jobsRoot, job.id, {
+        refine: { status: "not_applicable", reason: "not_a_mesh", ms: 0 },
+      });
+    }
+    if (!settings.enabled) {
+      return updateJob(jobsRoot, job.id, {
+        refine: { status: "disabled", reason: "refine_off", ms: 0 },
+      });
+    }
+    const started = now();
+    try {
+      const raw = await readFileImpl(paths.model);
+      const result = refineGlb(raw, settings);
+      const ms = now() - started;
+      if (!result?.buffer) {
+        await rm(paths.refined, { force: true }).catch(() => {});
+        logEvent("refine_skipped", {
+          id: job.id,
+          reason: result?.reason ?? "unknown",
+          ms,
+        });
+        return updateJob(jobsRoot, job.id, {
+          refine: {
+            status: "skipped",
+            reason: result?.reason ?? "unknown",
+            ms,
+            metrics: result?.metrics ?? null,
+          },
+          refined: null,
+        });
+      }
+      await writeFile(paths.refined, result.buffer);
+      const model = validateGlb(result.buffer, {
+        maxBytes: config.limits.maxModelBytes,
+      });
+      logEvent("refine_applied", {
+        id: job.id,
+        trianglesBefore: result.metrics?.trianglesBefore ?? null,
+        trianglesAfter: model.triangles,
+        fragmentsRemoved: result.metrics?.fragmentsRemoved ?? null,
+        gapsFilled: result.metrics?.gapsFilled ?? null,
+        ms,
+      });
+      return updateJob(jobsRoot, job.id, {
+        refine: {
+          status: "applied",
+          reason: null,
+          ms,
+          settings: { ...settings },
+          metrics: result.metrics,
+        },
+        refined: {
+          file: "refined.glb",
+          bytes: model.bytes,
+          triangles: model.triangles,
+        },
+        timings: { ...(job.timings ?? {}), refineMs: ms },
+      });
+    } catch (error) {
+      const kiriError = toKiriError(error, "model_invalid");
+      await rm(paths.refined, { force: true }).catch(() => {});
+      logEvent("refine_failed", { id: job.id, code: kiriError.code });
+      return updateJob(jobsRoot, job.id, {
+        refine: {
+          status: "failed",
+          reason: kiriError.code,
+          ms: now() - started,
+          message: kiriError.message,
+        },
+        refined: null,
+      });
+    }
+  }
+
+  // Retry refinement from the saved raw GLB. This is the only "retry" that is
+  // always safe to offer: it cannot spend a credit.
+  async function refine(id) {
+    const job = await readJob(jobsRoot, id);
+    if (!job) throw new KiriError("not_found");
+    if (job.stage !== "ready" || job.artifact?.format !== "glb")
+      throw new KiriError("conflict");
+    const paths = jobPaths(jobsRoot, id);
+    const present = await stat(paths.model)
+      .then((info) => info.isFile())
+      .catch(() => false);
+    if (!present) throw new KiriError("model_invalid", { detail: "GLB asli hilang." });
+    const updated = await applyRefine(job, paths);
+    return updated ?? job;
   }
 
   function schedule(jobId, delay) {
@@ -266,10 +388,11 @@ export function createKiriService({
           maxBytes: config.limits.maxModelBytes,
         });
         await writeFile(paths.model, data);
+        // The artifact is recorded now, but the job is not "ready" until the
+        // refinement has run: a poller must never see ready with a refine field
+        // that is still about to change.
         const updated = await updateJob(jobsRoot, job.id, {
-          stage: "ready",
           error: null,
-          completedAt: new Date(now()).toISOString(),
           artifact: {
             format: "glb",
             file: "result.glb",
@@ -286,15 +409,27 @@ export function createKiriService({
             finalizeMs: now() - started,
           },
         });
+        // The raw GLB is already on disk and served from its own URL, so this
+        // pass can fail, be disabled or be skipped without losing the scan.
+        const refined = await applyRefine(updated ?? job, paths);
+        const published = await updateJob(jobsRoot, job.id, {
+          stage: "ready",
+          completedAt: new Date(now()).toISOString(),
+          timings: {
+            ...(refined?.timings ?? job.timings),
+            finalizeMs: now() - started,
+          },
+        });
         await cleanupTransient(paths);
         logEvent("job_ready", {
           id: job.id,
           format: "glb",
           bytes: model.bytes,
           triangles: model.triangles,
+          refined: refined?.refine?.status ?? "unknown",
           mock: config.mode === "mock",
         });
-        return updated;
+        return published;
       }
       const { data } = extract(zip, { maxBytes: config.limits.maxPlyBytes });
       validatePly(data, {
@@ -381,6 +516,21 @@ export function createKiriService({
     }
   }
 
+  // KIRI charges one credit per submission even when the reconstruction later
+  // fails, so an empty balance must stop the request before the upload. Only
+  // the live client exposes getBalance; the mock reports a healthy balance.
+  async function creditBalance() {
+    if (typeof client.getBalance !== "function") return null;
+    const { balance } = await client.getBalance();
+    return balance;
+  }
+
+  async function assertCredit() {
+    const balance = await creditBalance();
+    if (balance !== null && balance < 1) throw new KiriError("kiri_no_credit");
+    return balance;
+  }
+
   async function submit(args) {
     return withHashLock(args.videoHash, () => submitLocked(args));
   }
@@ -392,6 +542,7 @@ export function createKiriService({
       logEvent("job_deduplicated", { id: reusable.id, stage: reusable.stage });
       return { job: reusable, deduplicated: true };
     }
+    await assertCredit();
     const record = newJobRecord({
       videoHash,
       filename,
@@ -424,7 +575,9 @@ export function createKiriService({
       typeof client.submitFeaturelessImages === "function";
     const stillsMode = splatMode || scanMode || meshMode;
     const framesDir = join(jobDir, "frames");
+    const paths = jobPaths(jobsRoot, job.id);
     let stills = null;
+    let keptStills = [];
     let input = { mode: "video" };
     if (stillsMode) {
       try {
@@ -434,6 +587,8 @@ export function createKiriService({
           fps: config.input.fps,
           count: config.input.photos,
         });
+        if (config.keepStills)
+          keptStills = await saveStills(stills, paths).catch(() => []);
         const stillsKind = meshMode || scanMode ? "mesh" : "splat";
         input = {
           mode: meshMode ? "mesh" : scanMode ? "photo" : "splat",
@@ -483,6 +638,12 @@ export function createKiriService({
         stage: "queued",
         input,
         kiri: { serial: result.serial, status: 3, statusRaw: null },
+        ...(keptStills.length
+          ? {
+              photos: keptStills,
+              source: { ...job.source, photos: keptStills.length },
+            }
+          : {}),
         timings: {
           ...job.timings,
           submitMs: now() - submitStarted,
@@ -502,6 +663,111 @@ export function createKiriService({
       if (stillsMode)
         await rm(framesDir, { recursive: true, force: true }).catch(() => {});
       await rm(tempPath, { force: true }).catch(() => {});
+    }
+    schedule(job.id, config.poll.minMs);
+    return { job, deduplicated: false };
+  }
+
+  // A photoset is the other legal input: the seller already has stills of the
+  // piece, so the frames are copied into the job first (they are what the buyer
+  // falls back to) and then sent to the Photo Scan route.
+  async function submitPhotos(args) {
+    return withHashLock(args.videoHash, () => submitPhotosLocked(args));
+  }
+
+  async function submitPhotosLocked({
+    files = [],
+    videoHash,
+    bytes = 0,
+    filename = "foto.zip",
+    dimensions = null,
+    uploadMs = 0,
+  }) {
+    const reusable = await findReusableByHash(jobsRoot, videoHash);
+    if (reusable) {
+      logEvent("job_deduplicated", { id: reusable.id, stage: reusable.stage });
+      return { job: reusable, deduplicated: true };
+    }
+    await assertCredit();
+    const record = newJobRecord({
+      videoHash,
+      filename,
+      bytes,
+      provider: client.provider,
+      dimensions,
+      kind: "photos",
+    });
+    await saveNewJob(jobsRoot, record);
+    const paths = jobPaths(jobsRoot, record.id);
+    let job = await updateJob(jobsRoot, record.id, {
+      stage: "submitting",
+      attempts: { ...record.attempts, submit: 1 },
+      timings: { uploadMs },
+    });
+    const submitStarted = now();
+    await mkdir(paths.photosDir, { recursive: true });
+    const saved = [];
+    const copies = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const source = files[index];
+      const extension = /\.png$/i.test(source.filename ?? "") ? "png" : "jpg";
+      const file = `photo-${index + 1}.${extension}`;
+      const destination = join(paths.photosDir, file);
+      await copyFile(source.path, destination);
+      const info = await stat(destination).catch(() => null);
+      saved.push({ file, bytes: info?.size ?? 0, original: source.filename ?? file });
+      copies.push({ path: destination, filename: source.filename ?? file });
+    }
+    const photoMode = typeof client.submitPhotoImages === "function";
+    const input = {
+      mode: photoMode ? "photo" : "splat",
+      kind: "mesh",
+      source: "photos",
+      photos: copies.length,
+      ...(photoMode
+        ? {
+            fileFormat: "GLB",
+            modelQuality: config.input.modelQuality,
+            textureQuality: config.input.textureQuality,
+            textureSmoothing: config.input.textureSmoothing,
+            mask: config.isMask ? 1 : 0,
+          }
+        : {}),
+    };
+    try {
+      const result = photoMode
+        ? await client.submitPhotoImages({
+            files: copies,
+            mask: config.isMask,
+            modelQuality: config.input.modelQuality,
+            textureQuality: config.input.textureQuality,
+            textureSmoothing: config.input.textureSmoothing,
+            fileFormat: "GLB",
+            jobDir: paths.dir,
+          })
+        : await client.submitImages({ files: copies, mask: config.isMask, jobDir: paths.dir });
+      job = await updateJob(jobsRoot, job.id, {
+        stage: "queued",
+        input,
+        photos: saved,
+        source: { ...job.source, photos: saved.length },
+        kiri: { serial: result.serial, status: 3, statusRaw: null },
+        timings: {
+          ...job.timings,
+          submitMs: now() - submitStarted,
+          queuedAt: new Date(now()).toISOString(),
+        },
+      });
+      logEvent("job_submitted", {
+        id: job.id,
+        mock: config.mode === "mock",
+        input: input.mode,
+        photos: input.photos,
+        source: "photos",
+      });
+    } catch (error) {
+      await fail(job, toKiriError(error));
+      job = await readJob(jobsRoot, job.id);
     }
     schedule(job.id, config.poll.minMs);
     return { job, deduplicated: false };
@@ -541,5 +807,16 @@ export function createKiriService({
     timers.clear();
   }
 
-  return { submit, retry, resume, stop, dto, tick, finalize };
+  return {
+    submit,
+    submitPhotos,
+    retry,
+    refine,
+    resume,
+    stop,
+    dto,
+    tick,
+    finalize,
+    balance: creditBalance,
+  };
 }

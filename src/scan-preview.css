@@ -81,3 +81,96 @@
     aspect-ratio: 16 / 10;
   }
 }
+
+/* Source switcher: refined preview, KIRI's own scan, the seller's photos. It
+   sits directly above the viewer so the buyer can always get back to the raw
+   evidence without leaving the page. */
+.scan-source-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-pill);
+  background: var(--ld-surface, rgba(255, 255, 255, 0.6));
+}
+
+.scan-source-tab {
+  flex: 1 1 auto;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: var(--ld-radius-pill);
+  background: transparent;
+  color: var(--ld-ink-soft);
+  font: inherit;
+  font-size: var(--ld-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.scan-source-tab[aria-selected="true"] {
+  background: var(--ld-green-deep, #1f4d3a);
+  color: #fff;
+}
+
+.scan-source-tab:focus-visible {
+  outline: 2px solid var(--ld-green-deep, #1f4d3a);
+  outline-offset: 2px;
+}
+
+.scan-refine-note {
+  max-width: 62ch;
+  margin: 4px auto 0;
+  color: var(--ld-ink-muted);
+  font-size: var(--ld-text-xs, 12px);
+  line-height: 1.5;
+}
+
+.scan-photos {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--ld-line);
+  border-radius: var(--ld-radius-lg, 16px);
+  background: var(--ld-surface, rgba(255, 255, 255, 0.7));
+}
+
+.scan-photos h2 {
+  margin: 0 0 4px;
+  font-size: var(--ld-text-md);
+}
+
+.scan-photos-note {
+  margin: 0 0 10px;
+  color: var(--ld-ink-muted);
+  font-size: var(--ld-text-sm);
+  line-height: 1.5;
+}
+
+.scan-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scan-photo-grid img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  background: var(--ld-line);
+}
+
+@media (max-width: 640px) {
+  .scan-source-tab {
+    padding: 8px 10px;
+    font-size: var(--ld-text-xs, 12px);
+  }
+
+  .scan-photo-grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
+}

@@ -39,6 +39,12 @@ double-click — Three.js and the model are inlined, so it needs no server, no
 network and no key. The normals view is how the hole was proven to be absent
 surface rather than bad shading.*
 
+**Refinement is a separate, free stage** that runs on any GLB KIRI returns and
+never overwrites it: `/result.glb` is the refined file, `/raw.glb` is KIRI's own
+build, `/photos/:n` are the stills that shaped it. What it fixes, what it
+refuses to fix, the measured before/after numbers and the live failure classes
+are in [refinement.md](refinement.md).
+
 The older featureless-mesh chair stays in
 [assets/kiri-mesh-chair.png](assets/kiri-mesh-chair.png) and
 [assets/kiri-mesh-viewer.png](assets/kiri-mesh-viewer.png) for provenance: it
