@@ -144,25 +144,33 @@ const browser = await chromium.launch({
     "--use-angle=swiftshader",
     "--enable-unsafe-swiftshader",
     "--disable-dev-shm-usage",
+    // A fake rear camera so the release recorder can be exercised without a
+    // phone. The recorder itself is real: getUserMedia, MediaRecorder, review.
+    "--use-fake-device-for-media-stream",
+    "--use-fake-ui-for-media-stream",
   ],
 });
 
 await startServer();
 
 async function newPage(options = {}) {
+  // Most checks prove the page never reaches for the camera by itself; the
+  // recorder check opts out and uses the fake device instead.
+  const { blockCamera = true, ...contextOptions } = options;
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
-    ...options,
+    ...contextOptions,
   });
-  await context.addInitScript(() => {
-    window.__kiriMediaCalls = 0;
-    if (navigator.mediaDevices)
-      for (const method of ["getUserMedia", "getDisplayMedia"])
-        navigator.mediaDevices[method] = async () => {
-          window.__kiriMediaCalls += 1;
-          throw new Error("upload-only prototype must not open a camera");
-        };
-  });
+  if (blockCamera)
+    await context.addInitScript(() => {
+      window.__kiriMediaCalls = 0;
+      if (navigator.mediaDevices)
+        for (const method of ["getUserMedia", "getDisplayMedia"])
+          navigator.mediaDevices[method] = async () => {
+            window.__kiriMediaCalls += 1;
+            throw new Error("the page must not open a camera before the seller asks");
+          };
+    });
   const page = await context.newPage();
   page.setDefaultTimeout(20_000);
   page.on("pageerror", (error) =>
@@ -387,7 +395,7 @@ async function layoutFacts(page) {
     return { badge: badge.trim() };
   });
 
-  await check("the upload-only prototype never asks for a camera", async () => {
+  await check("opening the upload page never starts a camera by itself", async () => {
     const calls = await page.evaluate(() => window.__kiriMediaCalls ?? 0);
     assert.equal(calls, 0);
     return { mediaCalls: calls };
@@ -756,7 +764,54 @@ async function layoutFacts(page) {
   await context.close();
 }
 
-await browser.close();
+// 4. The release recorder, driven through a fake rear camera. getUserMedia and
+// MediaRecorder are real; only the sensor is synthetic. Nothing is submitted,
+// so the job counts above stay untouched.
+{
+  const { context, page } = await newPage({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    blockCamera: false,
+  });
+  await context.grantPermissions(["camera"], { origin: base });
+
+  await check("the camera records a clip that reaches the consent step", async () => {
+    await open(page, "/jual/pindai");
+    await page.locator("[data-scan-open-camera]").click();
+    await page.locator("[data-rec-start]").waitFor({ timeout: 20_000 });
+    const live = (await page.locator("[data-rec-status]").innerText()).trim();
+    await page.locator("[data-rec-start]").click();
+    await page.waitForTimeout(9200);
+    await page.locator("[data-rec-stop]").click();
+    await page.locator("[data-rec-use]").waitFor({ timeout: 20_000 });
+    const review = (await page.locator("[data-rec-status]").innerText()).trim();
+    await page.locator("[data-rec-use]").click();
+    await page.locator("[data-scan-media]:not([hidden]) video").waitFor();
+    const facts = (await page.locator("[data-scan-facts]").innerText()).trim();
+    assert.match(facts, /\.(?:webm|mp4)/i, `recording name: ${facts}`);
+    // Android's streamed WebM reports no duration until the clip is seeked;
+    // the page recovers it, so a real length must still be shown.
+    assert.match(facts, /\d+ dtk/, `recorded length: ${facts}`);
+    assert.equal(await page.locator("[data-scan-submit]").isDisabled(), true);
+    await page.locator("[data-scan-consent]").check();
+    assert.equal(await page.locator("[data-scan-submit]").isEnabled(), true);
+    const released = await page.evaluate(
+      () => document.querySelector("[data-rec-video]")?.srcObject === null,
+    );
+    assert.equal(released, true, "camera tracks must be released on use");
+    await shot(page, "21-camera-recorded");
+    return { live, review, facts };
+  });
+
+  await check("the camera flow raised no page errors or failed responses", async () => {
+    assert.deepEqual(report.pageErrors, []);
+    assert.deepEqual(report.failedResponses, []);
+    return { pageErrors: 0, failedResponses: 0 };
+  });
+
+  await context.close();
+}
 await stopServer();
 report.finished = new Date().toISOString();
 report.serverLogTail = serverLog.slice(-4000);
