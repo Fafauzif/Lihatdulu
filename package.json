@@ -13,10 +13,11 @@
     "generate:products": "node scripts/render-core-assets.mjs",
     "test:browser": "node scripts/verify-v8.mjs",
     "test:legacy": "node scripts/verify-stitch.mjs",
-    "scan:api": "node server/scan-server.mjs --api-only",
-    "scan:serve": "node server/scan-server.mjs",
-    "scan:fake": "node server/scan-server.mjs --fake",
-    "test:scan": "node --test tests/scan-*.test.js && node scripts/verify-scan.mjs"
+    "scan:serve": "node server/kiri-server.mjs",
+    "scan:mock": "node scripts/kiri-mock.mjs",
+    "test:kiri": "node --test tests/kiri-*.test.js tests/scan-*.test.js",
+    "test:kiri:browser": "node scripts/verify-kiri-scan.mjs",
+    "test:scan": "npm run test:kiri && npm run test:kiri:browser"
   },
   "keywords": [],
   "author": "",

@@ -1,5 +1,10 @@
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { SPLAT_CLI } from "../server/kiri-artifact.mjs";
+import {
+  defaultEnvFile,
+  loadDotEnv,
+  readKiriConfig,
+} from "../server/kiri-config.mjs";
 
 const repoRoot = new URL("../", import.meta.url);
 const scan = process.argv.includes("--scan");
@@ -20,20 +25,17 @@ console.log(existsSync(new URL("node_modules/vite/package.json", repoRoot))
   ? "Vite dependencies are present."
   : "Vite dependencies are missing. Run npm ci from the repo root.");
 if (!scan) {
-  console.log("Pass --scan to inventory the laptop's reconstruction tools.");
+  console.log("Pass --scan to check the KIRI configuration and the SPZ converter.");
 } else {
-  for (const [command, args] of [
-    ["ffmpeg", ["-version"]],
-    ["ffprobe", ["-version"]],
-    ["colmap", ["-h"]],
-    ["brush", ["--help"]],
-    ["nvidia-smi", ["--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"]],
-    ["cloudflared", ["--version"]],
-  ]) {
-    const result = spawnSync(command, args, { encoding: "utf8", timeout: 5000, windowsHide: true });
-    const firstLine = (result.stdout || result.stderr || "").trim().split(/\r?\n/, 1)[0];
-    const status = result.error?.code ?? (result.status === 0 ? "OK" : `exit ${result.status}`);
-    console.log(`${command.padEnd(12)} ${status}${firstLine ? ` · ${firstLine}` : ""}`);
-  }
-  console.log("Inventory only. A tool absent from PATH may have a desktop launcher or absolute executable path.");
+  loadDotEnv(defaultEnvFile());
+  const config = readKiriConfig();
+  console.log(`KIRI mode       ${config.mode}${config.mode === "mock" ? " · simulation, no network" : ""}`);
+  console.log(`KIRI_API_KEY    ${config.apiKey ? "set · value hidden" : "not set"}`);
+  console.log(`KIRI API base   ${config.baseUrl}`);
+  console.log(`Jobs root       ${config.jobsRoot}`);
+  console.log(`Converter       ${existsSync(SPLAT_CLI) ? "splat-transform present" : "missing · run npm ci"}`);
+  console.log(`dist            ${existsSync(new URL("dist/index.html", repoRoot)) ? "present" : "missing · run npm run build"}`);
+  console.log("The KIRI path runs without COLMAP, Brush, CUDA or FFmpeg.");
+  if (config.mode === "unconfigured")
+    console.log("Set KIRI_API_KEY in .env for one live test, or KIRI_MOCK=1 for the labelled simulation.");
 }

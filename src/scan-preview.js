@@ -1,279 +1,360 @@
+import "./scan.css";
 import "./scan-preview.css";
-import { esc } from "./components.js";
 import {
-  ERROR_COPY,
   PREVIEW_COPY,
   STAGE_LABELS,
-  STAGE_SEQUENCE,
-  formatArtifactSize,
-  formatDimensions,
+  errorCopy,
+  formatBytes,
   formatDuration,
-  getScan,
+  getJob,
+  isTerminalStage,
   nextPollDelay,
+  refineJob,
+  retryJob,
+  stageIndex,
 } from "./scan-api.js";
+import { detailRows, refineNote, sourceOptions } from "./scan-views.js";
 
-const TERMINAL = new Set(["ready", "failed"]);
+export { renderScanPreview } from "./scan-views.js";
 
-export function renderScanPreview(id) {
-  return `<section class="scan-preview" data-scan-preview data-scan-id="${esc(id)}">
-    <header class="scan-preview-head">
-      <span class="scan-preview-badge">${PREVIEW_COPY.badge}</span>
-      <h1 data-scan-title>Hasil pindai</h1>
-      <p class="scan-preview-facts" data-scan-facts>Memuat detail barang…</p>
-      <p class="scan-preview-disclaimer">${PREVIEW_COPY.disclaimer}</p>
-    </header>
-    <div class="scan-preview-grid">
-      <div class="scan-preview-main">
-        <div class="scan-viewer" data-scan-viewer>
-          <img class="scan-viewer-poster" data-scan-poster alt="Bingkai dari rekaman pindai" hidden>
-          <p class="scan-viewer-placeholder" data-scan-viewer-placeholder>Menyiapkan pratinjau 3D…</p>
-        </div>
-        <section class="scan-stills" data-scan-stills hidden>
-          <h2>Bingkai dari rekaman</h2>
-          <div class="scan-stills-row" data-scan-stills-row></div>
-        </section>
-      </div>
-      <aside class="scan-preview-side">
-        <section class="scan-card" data-scan-status-card>
-          <h2>Status pemrosesan</h2>
-          <ol class="scan-stage-list" data-scan-stage-list>
-            ${STAGE_SEQUENCE.map(
-              (stage) =>
-                `<li data-stage="${stage}"><span aria-hidden="true"></span>${STAGE_LABELS[stage]}</li>`,
-            ).join("")}
-          </ol>
-          <p class="scan-card-note" data-scan-note>Proses berjalan di laptop demo. Jangan tutup laptop atau tab ini.</p>
-          <p class="scan-error" data-scan-error role="alert" hidden></p>
-          <div class="scan-retry" data-scan-retry hidden>
-            <a class="scan-link-button primary" href="/jual/pindai" data-nav>${PREVIEW_COPY.retake}</a>
-            <button type="button" class="scan-link-button" data-scan-reload>Coba lagi</button>
-          </div>
-        </section>
-        <section class="scan-card scan-provenance" data-scan-provenance hidden>
-          <h2>Asal rekaman</h2>
-          <dl data-scan-provenance-list></dl>
-        </section>
-        <div class="scan-preview-actions">
-          <a class="scan-link-button primary" href="/jual/pindai" data-nav>${PREVIEW_COPY.retake}</a>
-          <a class="scan-link-button" href="/beli" data-nav>${PREVIEW_COPY.catalog}</a>
-        </div>
-      </aside>
-    </div>
-  </section>`;
-}
+// Buyer-visible result page. It only reads the job record, so reloading the
+// URL resumes polling (or shows the finished model) without a new submission.
+//
+// A finished mesh job has up to three sources: the refined preview, KIRI's own
+// scan and the seller's photos. The refined one is preselected, but the buyer
+// can always reach the raw scan and the photos from the same page.
 
-export function mountScanPreview(root, { id, onNavigate, onToast } = {}) {
-  const host = root.matches?.("[data-scan-preview]")
-    ? root
-    : root.querySelector("[data-scan-preview]");
+export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
+  const host = root.matches?.("[data-scan-preview]") ? root : root.querySelector("[data-scan-preview]");
   if (!host) return () => {};
-  const $ = (selector) => host.querySelector(selector);
-  const title = $("[data-scan-title]");
-  const facts = $("[data-scan-facts]");
-  const stageList = $("[data-scan-stage-list]");
-  const note = $("[data-scan-note]");
-  const errorNode = $("[data-scan-error]");
-  const retry = $("[data-scan-retry]");
-  const provenance = $("[data-scan-provenance]");
-  const provenanceList = $("[data-scan-provenance-list]");
-  const stills = $("[data-scan-stills]");
-  const stillsRow = $("[data-scan-stills-row]");
-  const viewerHost = $("[data-scan-viewer]");
-  const poster = $("[data-scan-poster]");
-  const placeholder = $("[data-scan-viewer-placeholder]");
-  const reload = $("[data-scan-reload]");
+  const q = (selector) => host.querySelector(selector);
+  const title = q("[data-scan-title]");
+  const facts = q("[data-scan-facts]");
+  const provider = q("[data-scan-provider]");
+  const viewerHost = q("[data-scan-viewer]");
+  const placeholder = q("[data-scan-viewer-placeholder]");
+  const stages = [...host.querySelectorAll("[data-scan-stage]")];
+  const note = q("[data-scan-note]");
+  const statusCard = q("[data-scan-status]");
+  const provenance = q("[data-scan-provenance]");
+  const details = q("[data-scan-details]");
+  const errorCard = q("[data-scan-error]");
+  const errorText = q("[data-scan-error-text]");
+  const retryButton = q("[data-scan-retry]");
+  const refineButton = q("[data-scan-refine]");
+  const tabs = q("[data-scan-tabs]");
+  const caveat = q("[data-scan-caveat]");
+  const hint = q("[data-scan-hint]");
+  const refineLine = q("[data-scan-refine-note]");
+  const photosPanel = q("[data-scan-photos]");
+  const photoGrid = q("[data-scan-photo-grid]");
 
-  let disposed = false;
-  let timer = 0;
-  let attempt = 0;
-  let controller = null;
-  let viewerCleanup = null;
-  let last = null;
+  const controller = new AbortController();
+  const { signal } = controller;
+  const state = {
+    disposed: false,
+    timer: 0,
+    attempt: 0,
+    viewer: null,
+    job: null,
+    source: null,
+    mountedFor: null,
+  };
 
-  function schedule() {
-    clearTimeout(timer);
-    timer = setTimeout(load, nextPollDelay(attempt));
+  function clearTimer() {
+    clearTimeout(state.timer);
+    state.timer = 0;
   }
 
-  function setStage(stage) {
-    const index = STAGE_SEQUENCE.indexOf(stage);
-    stageList.hidden = false;
-    for (const item of stageList.querySelectorAll("li")) {
-      const position = STAGE_SEQUENCE.indexOf(item.dataset.stage);
-      item.classList.toggle(
-        "is-done",
-        stage === "ready" || (index > -1 && position < index),
-      );
-      item.classList.toggle("is-active", position === index);
+  function paintStages(stage) {
+    const current = stageIndex(stage);
+    const stopped = stage === "failed" || stage === "expired";
+    for (const item of stages) {
+      const index = stageIndex(item.dataset.scanStage);
+      item.classList.toggle("is-done", !stopped && index < current);
+      item.classList.toggle("is-active", !stopped && index === current);
+      item.classList.toggle("is-stopped", stopped && index === current);
     }
   }
 
-  function paintStills(dto) {
-    const urls = dto.artifact?.stills ?? [];
-    stillsRow.replaceChildren();
-    for (const url of urls) {
-      const image = document.createElement("img");
-      image.src = url;
-      image.alt = "Bingkai dari rekaman pindai";
-      image.loading = "lazy";
-      image.width = 320;
-      image.height = 200;
-      stillsRow.append(image);
-    }
-    stills.hidden = urls.length === 0;
+  function unmountViewer() {
+    state.viewer?.();
+    state.viewer = null;
+    state.mountedFor = null;
+    viewerHost.dataset.state = "idle";
+    for (const canvas of viewerHost.querySelectorAll("canvas")) canvas.remove();
+    placeholder.hidden = false;
+    placeholder.dataset.tone = "";
+    placeholder.textContent = "Memuat model 3D…";
   }
 
-  function paintProvenance(dto) {
-    const source = dto.provenance;
-    if (!source) {
-      provenance.hidden = true;
-      return;
-    }
-    const rows = [
-      ["Durasi rekaman", `${String(source.source?.clipSeconds ?? 0).replace(".", ",")} detik`],
-      ["Perangkat", source.source?.device || "Tidak tercatat"],
-      [
-        "Bingkai",
-        `${source.frames?.extracted ?? 0} diambil · ${source.frames?.registered ?? 0} terdaftar (${Math.round((source.frames?.ratio ?? 0) * 100)}%)`,
-      ],
-      ["Waktu proses", formatDuration(source.timings?.totalMs)],
-      [
-        "Artefak",
-        `${formatArtifactSize(source.artifact?.bytes)} · ${Number(source.artifact?.splatCount ?? 0).toLocaleString("id-ID")} splat`,
-      ],
-    ];
-    provenanceList.replaceChildren(
-      ...rows.map(([label, value]) => {
-        const term = document.createElement("dt");
-        term.textContent = label;
-        const detail = document.createElement("dd");
-        detail.textContent = value;
-        return [term, detail];
-      }).flat(),
-    );
-    provenance.hidden = false;
-  }
-
-  function mountViewer(dto) {
-    if (viewerCleanup || !dto.artifact?.url) return;
-    if (poster && dto.artifact.stills?.[0]) {
-      poster.src = dto.artifact.stills[0];
-      poster.hidden = false;
-    }
+  function mountViewer(option) {
+    if (!option?.url) return;
+    if (state.mountedFor === option.url) return;
+    unmountViewer();
+    state.mountedFor = option.url;
     void import("./scan-viewer.js")
       .then((module) => {
-        if (disposed) return;
-        viewerCleanup = module.mountScanViewer(viewerHost, {
-          url: dto.artifact.url,
-          poster: dto.artifact.stills?.[0],
+        if (state.disposed || state.mountedFor !== option.url) return;
+        state.viewer = module.mountScanViewer(viewerHost, {
+          url: option.url,
+          format: option.format,
           onStatus: (message, tone = "") => {
-            if (!placeholder) return;
-            if (message) {
-              placeholder.textContent = message;
-              placeholder.hidden = false;
-            }
+            if (!message) return;
+            placeholder.hidden = false;
+            placeholder.textContent = message;
             placeholder.dataset.tone = tone;
           },
         });
       })
       .catch(() => {
-        if (disposed || !placeholder) return;
-        placeholder.textContent =
-          "Pratinjau 3D belum bisa dibuka di perangkat ini. Bingkai rekaman tetap tersedia.";
-        placeholder.dataset.tone = "error";
+        if (state.disposed) return;
         placeholder.hidden = false;
+        placeholder.textContent = "Pratinjau 3D belum bisa dibuka di perangkat ini.";
+        placeholder.dataset.tone = "error";
       });
   }
 
-  function paint(dto) {
-    last = dto;
-    title.textContent = dto.meta?.title || "Hasil pindai";
-    facts.textContent = dto.meta
-      ? `${formatDimensions(dto.meta)}${dto.meta.conditionNote ? ` · ${dto.meta.conditionNote}` : ""}`
-      : "";
-    errorNode.hidden = true;
-    retry.hidden = true;
-    if (dto.stage === "failed") {
-      stageList.hidden = true;
-      errorNode.textContent =
-        ERROR_COPY[dto.error?.code] ?? ERROR_COPY.default;
-      errorNode.hidden = false;
-      retry.hidden = false;
-      note.textContent = "Pemrosesan berhenti. Rekam ulang barang yang sama.";
-      note.hidden = false;
-      return;
+  function paintPhotos(dto) {
+    const photos = dto.photos ?? [];
+    photoGrid.replaceChildren(
+      ...photos.map((photo, index) => {
+        const item = document.createElement("li");
+        const image = document.createElement("img");
+        image.src = photo.url;
+        image.alt = `Foto asli barang ${index + 1}`;
+        image.loading = "lazy";
+        image.width = 480;
+        image.height = 360;
+        item.append(image);
+        return item;
+      }),
+    );
+    photosPanel.hidden = !photos.length || state.source !== "photos";
+  }
+
+  function paintSources(dto) {
+    const options = sourceOptions(dto);
+    const available = options.map((option) => option.id);
+    const preferred = available.includes("refined")
+      ? "refined"
+      : available.includes("raw")
+        ? "raw"
+        : available.includes("photos")
+          ? "photos"
+          : null;
+    if (!available.includes(state.source)) state.source = preferred;
+
+    tabs.hidden = options.length < 2;
+    tabs.replaceChildren(
+      ...options.map((option) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "scan-source-tab";
+        button.dataset.scanSource = option.id;
+        button.setAttribute("role", "tab");
+        button.setAttribute("aria-selected", String(option.id === state.source));
+        button.textContent = option.label;
+        button.addEventListener(
+          "click",
+          () => {
+            if (state.source === option.id) return;
+            state.source = option.id;
+            paintSources(state.job);
+          },
+          { signal },
+        );
+        return button;
+      }),
+    );
+
+    const active = options.find((option) => option.id === state.source) ?? null;
+    caveat.textContent = active?.caveat ?? PREVIEW_COPY.caveat;
+    caveat.hidden = !active;
+    hint.hidden = active?.id === "photos";
+    viewerHost.hidden = active?.id === "photos";
+    if (active?.id === "photos") {
+      unmountViewer();
+      viewerHost.hidden = true;
+    } else {
+      viewerHost.hidden = false;
+      mountViewer(active);
     }
-    setStage(dto.stage);
+    paintPhotos(dto);
+  }
+
+  function paintJob(dto) {
+    state.job = dto;
+    title.textContent = dto.stage === "ready" ? "Model 3D hasil pindai" : "Pindai furnitur";
+    provider.textContent = dto.mock
+      ? "Mode simulasi: hasil ini dibuat lokal untuk menguji alur, bukan dari KIRI Engine."
+      : PREVIEW_COPY.modelNote;
+    errorCard.hidden = true;
+    retryButton.hidden = true;
+    paintStages(dto.stage);
+
     if (dto.stage === "ready") {
-      note.textContent =
-        "Pemrosesan selesai di laptop demo. Model ini berasal dari rekaman barumu.";
-      paintStills(dto);
-      paintProvenance(dto);
-      mountViewer(dto);
+      statusCard.hidden = true;
+      provenance.hidden = false;
+      details.innerHTML = detailRows(dto)
+        .map(([term, value]) => `<dt>${term}</dt><dd>${value}</dd>`)
+        .join("");
+      // A mesh has triangles, a splat cloud has points; say which one this is
+      // instead of printing "0 splat" for a GLB.
+      const parts =
+        dto.artifact?.format === "glb"
+          ? [
+              `${Number(dto.artifact?.triangles ?? 0).toLocaleString("id-ID")} segitiga`,
+              dto.artifact?.refined ? "model disempurnakan" : "mesh",
+            ]
+          : [`${Number(dto.artifact?.splatCount ?? 0).toLocaleString("id-ID")} splat`];
+      facts.textContent = `${parts.join(" · ")} · ${formatBytes(dto.artifact?.bytes)} · diproses ${formatDuration(Math.round((dto.timings?.totalMs ?? 0) / 1000))}`;
+      refineLine.textContent = refineNote(dto);
+      refineLine.hidden = !refineLine.textContent;
+      // The refine stage is free to retry from the saved GLB, so it is offered
+      // whenever it did not apply and the job kept KIRI's mesh.
+      refineButton.hidden = !(
+        dto.artifact?.format === "glb" &&
+        dto.artifact?.raw &&
+        dto.refine?.status !== "applied"
+      );
+      paintSources(dto);
+      placeholder.hidden = viewerHost.dataset.state === "ready" || state.source === "photos";
       return;
     }
-    note.hidden = false;
+
+    statusCard.hidden = false;
+    provenance.hidden = true;
+    refineLine.hidden = true;
+    refineButton.hidden = true;
+    tabs.hidden = true;
+    photosPanel.hidden = true;
+    facts.textContent = "Model sedang disiapkan. Halaman ini memperbarui statusnya sendiri.";
+    if (dto.stage === "failed" || dto.stage === "expired") {
+      errorCard.hidden = false;
+      errorText.textContent = errorCopy(dto.error?.code, dto.error?.message);
+      retryButton.hidden = !(dto.error?.retryable && dto.kiri?.serial);
+      note.textContent =
+        dto.stage === "expired"
+          ? "KIRI menyimpan hasil tiga hari. Setelah itu model harus diproses ulang dari video."
+          : "Proses berhenti. Coba proses ulang bila kesalahannya di unduhan atau konversi; kalau tidak, pindai ulang barangnya.";
+      placeholder.hidden = false;
+      placeholder.textContent =
+        dto.stage === "expired" ? "Hasil sudah tidak tersedia." : "Belum ada model untuk ditampilkan.";
+      placeholder.dataset.tone = "error";
+      return;
+    }
+    note.textContent =
+      dto.stage === "processing"
+        ? "KIRI Engine sedang menyusun model. Biasanya beberapa menit untuk satu barang."
+        : "Menunggu antrean. Halaman ini memeriksa ulang secara berkala.";
+    viewerHost.hidden = false;
+    placeholder.hidden = false;
+    placeholder.textContent = STAGE_LABELS[dto.stage] ?? "Menyiapkan model…";
+    placeholder.dataset.tone = "";
   }
 
   function paintMissing() {
-    if (disposed) return;
     title.textContent = PREVIEW_COPY.notFound;
-    facts.textContent = "";
-    stageList.hidden = true;
-    errorNode.hidden = true;
-    retry.hidden = false;
-    note.textContent =
-      "Periksa tautan atau rekam barang baru dari halaman pindai.";
-    note.hidden = false;
-    if (placeholder)
-      placeholder.textContent = "Tidak ada pratinjau untuk tautan ini.";
+    facts.textContent = PREVIEW_COPY.notFoundNote;
+    provider.textContent = "";
+    statusCard.hidden = true;
+    provenance.hidden = true;
+    errorCard.hidden = true;
+    refineLine.hidden = true;
+    refineButton.hidden = true;
+    tabs.hidden = true;
+    photosPanel.hidden = true;
+    placeholder.hidden = false;
+    placeholder.textContent = "Tidak ada model untuk tautan ini.";
+    placeholder.dataset.tone = "error";
   }
 
   async function load() {
-    if (disposed) return;
-    controller = new AbortController();
+    if (state.disposed) return;
+    clearTimer();
     try {
-      const dto = await getScan(id, { signal: controller.signal });
-      if (disposed) return;
-      attempt = 0;
-      paint(dto);
-      if (!TERMINAL.has(dto.stage)) schedule();
+      const dto = await getJob(id);
+      if (state.disposed) return;
+      state.attempt = 0;
+      paintJob(dto);
+      if (!isTerminalStage(dto.stage))
+        state.timer = setTimeout(() => void load(), nextPollDelay(state.attempt++));
     } catch (error) {
-      if (disposed || error?.name === "AbortError") return;
+      if (state.disposed || error?.name === "AbortError") return;
       if (error?.code === "not_found") {
         paintMissing();
         return;
       }
-      attempt += 1;
-      schedule();
+      if (state.attempt >= 5) {
+        errorCard.hidden = false;
+        errorText.textContent = errorCopy(error?.code, error?.message);
+        placeholder.hidden = false;
+        placeholder.textContent = "Status belum bisa dimuat.";
+        placeholder.dataset.tone = "error";
+        return;
+      }
+      state.timer = setTimeout(() => void load(), nextPollDelay(state.attempt++));
     }
   }
 
-  function onVisibility() {
-    if (document.hidden) {
-      clearTimeout(timer);
-      controller?.abort();
-      return;
-    }
-    if (!TERMINAL.has(last?.stage)) load();
-  }
+  retryButton.addEventListener(
+    "click",
+    async () => {
+      if (!state.job) return;
+      retryButton.disabled = true;
+      try {
+        const dto = await retryJob(state.job.id);
+        paintJob(dto);
+        void load();
+      } catch (error) {
+        onToast?.(errorCopy(error?.code, error?.message));
+      } finally {
+        retryButton.disabled = false;
+      }
+    },
+    { signal },
+  );
 
-  reload?.addEventListener("click", () => {
-    errorNode.hidden = true;
-    retry.hidden = true;
-    stageList.hidden = false;
-    attempt = 0;
-    load();
-  });
-  document.addEventListener("visibilitychange", onVisibility);
+  refineButton.addEventListener(
+    "click",
+    async () => {
+      if (!state.job) return;
+      refineButton.disabled = true;
+      refineButton.textContent = "Menyempurnakan…";
+      try {
+        const dto = await refineJob(state.job.id);
+        state.mountedFor = null;
+        paintJob(dto);
+        const status = dto.refine?.status;
+        if (status === "applied") onToast?.("Model disempurnakan dari pindaian yang tersimpan.");
+        else if (status === "failed" || status === "skipped")
+          onToast?.("Penyempurnaan belum berhasil. Pindaian asli tetap bisa dibuka.");
+      } catch (error) {
+        onToast?.(errorCopy(error?.code, error?.message));
+      } finally {
+        refineButton.disabled = false;
+        refineButton.textContent = PREVIEW_COPY.refine;
+      }
+    },
+    { signal },
+  );
+
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (!document.hidden && !isTerminalStage(state.job?.stage)) void load();
+    },
+    { signal },
+  );
+
   void load();
 
   return () => {
-    disposed = true;
-    clearTimeout(timer);
-    controller?.abort();
-    viewerCleanup?.();
-    document.removeEventListener("visibilitychange", onVisibility);
+    state.disposed = true;
+    clearTimer();
+    controller.abort();
+    state.viewer?.();
     host.replaceChildren();
   };
 }
