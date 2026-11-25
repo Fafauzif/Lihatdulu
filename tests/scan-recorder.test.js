@@ -1,62 +1,86 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  CAPTURE_TIPS,
   GUIDANCE,
   MAX_SECONDS,
   MIN_SECONDS,
-  MIME_PREFERENCE,
   cameraErrorCopy,
+  clipName,
+  extensionForMime,
   guidanceAt,
   pickRecorderMime,
+  recorderErrorCopy,
+  timeLabel,
 } from "../src/scan-recorder.js";
 
-test("pickRecorderMime prefers mp4 then vp9 then vp8 then webm", () => {
-  assert.equal(pickRecorderMime(() => true), "video/mp4;codecs=avc1.42E01E");
+// The recorder is the first thing a judge touches on a phone. These tests pin
+// the format choice and the recovery sentence for every way it can fail.
+
+test("MP4 is preferred, WebM is the accepted fallback, nothing else is invented", () => {
   assert.equal(
-    pickRecorderMime((type) => type === "video/webm;codecs=vp9"),
-    "video/webm;codecs=vp9",
+    pickRecorderMime((type) => type.startsWith("video/mp4")),
+    "video/mp4;codecs=avc1.42E01E",
   );
   assert.equal(
-    pickRecorderMime((type) => type === "video/webm"),
-    "video/webm",
+    pickRecorderMime((type) => type.includes("webm")),
+    "video/webm;codecs=vp9",
   );
   assert.equal(pickRecorderMime(() => false), null);
   assert.equal(pickRecorderMime(null), null);
-  assert.equal(MIME_PREFERENCE.at(-1), "video/webm");
+  // Safari throws for codec strings it does not know instead of returning false.
+  assert.equal(
+    pickRecorderMime((type) => {
+      if (type.includes("codecs")) throw new Error("bad type");
+      return type === "video/webm";
+    }),
+    "video/webm",
+  );
 });
 
-test("cameraErrorCopy names every camera failure in Indonesian", () => {
-  const named = (name) => Object.assign(new Error(name), { name });
-  assert.match(
-    cameraErrorCopy(named("NotAllowedError")),
-    /Izin kamera ditolak/,
-  );
-  assert.match(
-    cameraErrorCopy(named("NotFoundError")),
-    /Kamera tidak ditemukan/,
-  );
-  assert.match(
-    cameraErrorCopy(named("NotReadableError")),
-    /Kamera sedang dipakai/,
-  );
-  assert.match(cameraErrorCopy({ insecure: true }), /HTTPS/);
-  assert.match(cameraErrorCopy(named("WeirdError")), /Kamera belum bisa/);
+test("the clip keeps an extension the server can trust", () => {
+  assert.equal(extensionForMime("video/mp4;codecs=avc1"), "mp4");
+  assert.equal(extensionForMime("video/webm;codecs=vp8"), "webm");
+  assert.equal(clipName("video/webm", 1700000000000), "rekaman-1700000000000.webm");
+  assert.equal(clipName("video/mp4", 42), "rekaman-42.mp4");
 });
 
-test("guidance advances every seven seconds and stops at the last prompt", () => {
-  assert.equal(MIN_SECONDS, 8);
-  assert.equal(MAX_SECONDS, 45);
-  assert.equal(GUIDANCE.length, 6);
+test("guidance advances with the recording and stops on the last step", () => {
   assert.equal(guidanceAt(0), GUIDANCE[0]);
+  assert.equal(guidanceAt(6.9), GUIDANCE[0]);
   assert.equal(guidanceAt(7), GUIDANCE[1]);
-  assert.equal(guidanceAt(60), GUIDANCE[5]);
-  assert.equal(guidanceAt(-4), GUIDANCE[0]);
+  assert.equal(guidanceAt(1000), GUIDANCE.at(-1));
+  assert.equal(guidanceAt(undefined), GUIDANCE[0]);
+  assert.equal(GUIDANCE.length, 6);
+  assert.ok(MIN_SECONDS >= 8 && MIN_SECONDS < MAX_SECONDS);
 });
 
-test("capture tips cover dark furniture and backlight", () => {
-  assert.equal(CAPTURE_TIPS.length, 2);
-  assert.match(CAPTURE_TIPS[0], /gelap.*samping/i);
-  assert.match(CAPTURE_TIPS[1], /jendela.*belakang/i);
-  assert.equal(GUIDANCE.length, 6);
+test("every camera failure names a next action", () => {
+  assert.match(cameraErrorCopy({ insecure: true }), /HTTPS/);
+  assert.match(cameraErrorCopy({ name: "NotAllowedError" }), /Izinkan kamera/);
+  assert.match(cameraErrorCopy({ name: "SecurityError" }), /Izinkan kamera/);
+  assert.match(cameraErrorCopy({ name: "NotFoundError" }), /tidak ditemukan/);
+  assert.match(cameraErrorCopy({ name: "NotReadableError" }), /dipakai aplikasi lain/);
+  for (const copy of [
+    cameraErrorCopy({ insecure: true }),
+    cameraErrorCopy({ name: "NotAllowedError" }),
+    cameraErrorCopy({ name: "NotFoundError" }),
+    cameraErrorCopy({ name: "NotReadableError" }),
+    cameraErrorCopy({ name: "WeirdError" }),
+  ])
+    assert.match(copy, /kamera/i);
+  assert.match(cameraErrorCopy({ name: "NotAllowedError" }), /rekam lewat aplikasi kamera/i);
+});
+
+test("recorder failures distinguish empty, short and unsupported", () => {
+  assert.match(recorderErrorCopy({ unsupported: true }), /aplikasi kamera/);
+  assert.match(recorderErrorCopy({ empty: true }), /kosong/);
+  assert.match(recorderErrorCopy({ short: true }), /minimal 8 detik/);
+  assert.match(recorderErrorCopy({}), /Coba rekam lagi/);
+});
+
+test("the timer is a clock, not a raw second count", () => {
+  assert.equal(timeLabel(0), "0:00");
+  assert.equal(timeLabel(9.7), "0:09");
+  assert.equal(timeLabel(65), "1:05");
+  assert.equal(timeLabel(undefined), "0:00");
 });

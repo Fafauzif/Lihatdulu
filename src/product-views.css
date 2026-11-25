@@ -1071,3 +1071,27 @@
   gap: 6px;
   white-space: normal;
 }
+
+/* The fixed purchase bar sits on the bottom edge of a phone. Reserve its height
+   inside the 3D tab so the view toolbar, motion toggles and room actions can
+   always scroll clear of it instead of hiding behind the price. */
+@media (max-width: 700px) {
+  body.on-product .refined-product-page .inspection {
+    padding-bottom: calc(86px + env(safe-area-inset-bottom));
+  }
+  body.on-product .refined-product-page .inspection-toolbar,
+  body.on-product .refined-product-page .inspection-room-actions,
+  body.on-product .refined-product-page .inspection-motion,
+  body.on-product .refined-product-page .inspection-custom-room {
+    scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Four media tabs (Sora) read better as an even 2x2 on a phone than as a row of
+   three plus one full-width tab. Browsers without :has() keep the flex wrap. */
+@media (max-width: 600px) {
+  .refined-product-page .media-tabs:has(> a:nth-child(4)) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

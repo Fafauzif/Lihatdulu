@@ -1,35 +1,95 @@
-# Real furniture scan inside LihatDulu
+# Scan workstream — KIRI Engine prototype
 
-## First prove reconstruction on the Helios
+## Current direction
 
-Target Acer Predator Helios Neo 16, 13th-gen i7, 32 GB RAM and RTX 4060 Laptop GPU. Run `node scripts/lihatdulu-doctor.mjs --scan` on that laptop. Start on the host OS. Use pinned, working versions of [FFmpeg](https://ffmpeg.org/download.html), [COLMAP](https://colmap.github.io/install.html) and [Brush](https://github.com/ArthurBrussee/brush/releases); record versions and record the actual `brush --help` output for the chosen release. A command's presence is a prerequisite. Successful reconstruction is the proof.
+LihatDulu does not reconstruct on a laptop anymore. The server samples a few
+dozen stills from the seller's clip, sends them to
+[KIRI Engine](https://docs.kiriengine.app/), validates the returned artifact and
+serves it from storage we control. Two artifacts are supported: an SPZ splat
+cloud from the 3DGS routes, and a GLB mesh. The shipped default is **Photo Scan
+with automatic masking** (`KIRI_INPUT=photo`, Ultra), because it is the only
+route that returns the chair alone — one credit, two to four minutes. The
+browser flow is **upload-only** for now: choose an existing MP4, preview it,
+confirm the cloud send, watch the stages, then orbit the saved result.
+In-browser camera capture comes only after one real clip has passed end-to-end.
 
-1. Capture a stationary matte chair/stool with some texture in diffuse light. Move slowly around it at two heights. Keep one lens/zoom, overlap viewpoints, avoid blur and leave moving parts closed. Record close-ups of defects separately. Try one continuous 30–45 second clip as a starting heuristic.
-2. Use FFmpeg to extract consecutive sharp, overlapping frames, starting around 3 frames per second. Use a modest frame size for the first pass, and retain the source clip privately. Run sparse COLMAP and inspect registered views around the item before training. Use sequential matching as a first attempt for ordered video and check the actual local CLI flags.
-3. Feed the matched images and sparse COLMAP dataset to Brush. Run a short training/export pass using the installed CLI. Confirm the resulting PLY is a Gaussian splat accepted by the viewer. If compatible, make a smaller asset with [SuperSplat / splat-transform](https://developer.playcanvas.com/user-manual/supersplat/).
-4. Open the result on the laptop and intended phone. Record clip length, decode time, registered/total frames, camera coverage, training time, total runtime, file size and viewer load time. Compare it to the source clip. Inspect the rear, legs, top and any crop. Retry a second capture to check repeatability.
-5. Use a real clip before writing feature code if a physical clip is available. A known dataset can confirm installation while waiting for footage. Label that test accordingly.
+Detailed architecture, configuration and the live-test command:
+[kiri-scan.md](../kiri-scan.md).
 
-## Proposed integration
+## Why the reset
 
-Seller entry `/jual` → **Pindai furnitur** → rear camera and **Mulai pindai** → simple angle prompts → **Selesai** → automatic transfer and status → interactive **Pratinjau pembeli**. Camera and viewer stay in LihatDulu. The prepared Sora routes provide a separate example. Read `src/main.js`, `src/video-capture.js`, `src/video-state.js`, `src/inspection.js` and the dormant `src/seller.js` rear-camera example. Mount a dedicated capture module only on the real scan route.
+The previous `feat/scan-video-study` work proved that FFmpeg → COLMAP 4.2.1 →
+Brush 0.3.0 could reconstruct real chair clips on the Helios, but it required a
+CUDA GPU, pinned local tools and minutes of processing per clip. The owner
+replaced that experiment with a KIRI-backed prototype so the demo does not
+depend on the laptop GPU or a local tool installation. The old evidence remains
+in [scan-toolchain.md](../scan-toolchain.md), marked historical.
 
-- Use `getUserMedia` with rear-facing preference, video only, HTTPS and explicit permission. Use `playsinline` and choose a supported `MediaRecorder` format at runtime. Handle both MP4 and WebM where supported. Stop media tracks when done or leaving the route. Preserve a completed clip in-session for upload retry. Keep live instructions advisory unless real analysis supplies coverage.
-- Serve the built Vite site plus SPA routes and same-origin scan endpoints behind one laptop-hosted HTTPS demo URL. A protected [Cloudflare Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) is a demo option. Restrict to intended testers during active recording. The laptop and tunnel need to stay on. Use browser upload followed by status polling. Avoid pushing long video bodies through Vercel Functions, which have a documented 4.5 MB body limit. Confirm deployed camera permissions on the chosen route. [Camera API](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia) · [Recorder formats](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/isTypeSupported_static) · [Vercel limits](https://vercel.com/docs/functions/limitations).
-- Disk-backed demo state. One folder per opaque job ID outside `public/`, with input, working assets, an atomically updated job record and the final artifact. One worker, no database needed for this scope. Stream bounded uploads, validate media before starting the worker, pass fixed argument arrays, enforce run time/disk bounds and clean up according to the demo retention decision. Use server-controlled paths and authorize status/artifact access for the demo session.
-- Proposed endpoints, to confirm when implementing: **POST** `/api/scans` receives a finished clip and returns a job ID; **GET** `/api/scans/:id` reports current stage or a useful retake/failure reason; **GET** `/api/scans/:id/result` serves/redirects to the validated artifact once ready. Use honest stages such as Uploading, Queued, Extracting frames, Aligning cameras, Reconstructing, Ready and Failed. Poll by ID; associate the view with the job that came from that specific capture. Handle duplicate submits, retry, interrupted worker jobs and leaving/returning.
-- Use a dedicated splat viewer and lazy-load it. Give the scan its own provenance, condition photos and manually measured dimensions. Keep GLB kinematics and room fit tied to the existing geometry. The frontend stays in the current stack. For public rollout, persistent listings/ownership, isolated job workers, private media storage and sharing can be designed after the proof.
+## What is in the tree
 
-## Status 22 November 2026
+- `/jual/pindai` upload + preview + consent + stages.
+- `/pindai/:id` resumable result page: SparkJS for SPZ, `GLTFLoader` +
+  `OrbitControls` for a GLB mesh.
+- `server/kiri-*` adapter (live + labelled mock), ZIP/PLY/GLB validation, pinned
+  conversion for splats, disk-backed jobs, dedupe and retry.
+- `npm run scan:serve`, `npm run scan:mock`, `npm run test:kiri`,
+  `npm run test:kiri:browser`.
+- No COLMAP, Brush, CUDA or FFmpeg references in the active path.
 
-- The web/API half and worker are implemented (merged from `feat/real-furniture-scan`): `/jual/pindai` capture, automatic upload, honest job stages, `/pindai/:id` preview with SparkJS, provenance and stills, and the FFmpeg → COLMAP 4.2.1 → Brush 0.3.0 → SPZ pipeline on one disk-backed worker.
-- **Real chair reconstruction from phone camera originals is now proven in the lab pipeline on the Helios.** Seven of the eight `VID_*` takes reconstruct: golden 25.35 s = 76/76 registered in 291 s, repeat 20.13 s = 60/60 in 290 s, and all five variants (10.0–15.0 s, including the 4K take downscaled to 1280) register 100 % in 244–333 s. The registration ratio counts frames present in the chosen COLMAP model, not a visual-quality score. Artifacts are 0.34–0.68 MiB SPZ. All seven opened in the in-site SparkJS viewer at 1440 and 390 px. Full table: [scan-toolchain.md](../scan-toolchain.md#real-chair-clips--22-november-2026). The 3.33 s false start was excluded and the five compressed WhatsApp copies remain archived outside the batch.
-- Verdict **Go for reconstruction from camera originals**; the in-app capture path (phone → laptop → preview) is still unproven. Measured recipe: 1080p phone camera frames, one slow orbit preferably 15–25 s at two heights with overlapping views, side light for dark furniture, 3 fps base extraction (retry to 5–8 fps only when a VFR clip misses the 60-frame floor). Expect 4.1–5.6 minutes per clip on the Helios.
-- Two pipeline defects were found and fixed with RED→GREEN tests during the study: the batch passed a relative job root (COLMAP rejected the database parent path) and the worker assumed `sparse/0` even when the mapper wrote a larger sub-model (the repeat take looked like 2/60 while `sparse/1` held 60/60). A 15.00 s VFR take also exposed the extraction retry. No threshold was lowered.
-- Still missing: the physical phone → laptop → same-site preview run with no manual file transfer, the HTTPS tunnel proof, the phone viewer load time, and the phone-side failure checks. **The acceptance section below is not proven yet.**
+## Acceptance
 
-## Acceptance before judging
+Proven in mock mode on this branch:
 
-- Capture a fresh clip from the intended physical phone. No file transfer by hand. Valid input displays the same item as an interactive scan inside LihatDulu. Note the measured end-to-end time.
-- Verify permission denied, unsupported recorder, bad/incomplete footage, failed upload with retry, one busy worker, retake, reload/re-entry, exit releasing the camera, and unavailable result. Check camera permission is never requested by existing prepared routes.
-- Keep one earlier scan of the same physical object ready and label it as an earlier scan. Show the real fresh recording and processing stages, then let the judge orbit the earlier scan while the new one works if needed. Practice with the actual venue or fallback network and a charged laptop. Bring the original detail photo.
+- Full flow from MP4 selection to orbitable `/pindai/:id`, including reload
+  resume without a second job.
+- Failure + explicit resend after a server restart, one job per attempt.
+- 390×844 layout, touch orbit, no camera request anywhere.
+- Marketplace, catalogue, authored 3D and Sora routes unchanged: 26/26 existing
+  browser checks.
+- No page errors, failed app responses or external requests in the mock run.
+
+Proven against the real KIRI API (one paid job, 22 November 2026):
+
+- One 25.3 s portrait chair clip was accepted, uploaded (282 s), processed
+  (~29 min) and returned a 281 000-splat SPZ (4.84 MB).
+- The server downloaded the 53 MB ZIP, validated the PLY and converted it; the
+  result page loads it, orbits on desktop and touch, and a reload resumes the
+  same job without resubmitting.
+- Total submit → ready was 37 min 54 s. Evidence: `var/kiri-live/report.json`.
+
+Proven against the real KIRI API (overnight matrix and follow-ups, 22–23
+November 2026; six credits spent on the current key, four left):
+
+- **Photo Scan with masking on is the route that returns the chair alone.** 101
+  stills from the golden clip, `modelQuality=3` (Ultra), `textureQuality=0` (4K),
+  `isMask=1` → 2 136 020 B GLB, 1 m 2 s upload, 2 m 15 s KIRI, 3 m 42 s total,
+  serial `2156501db4bf49ca9de872f929188431`. No crop, no cleanup heuristic. The
+  same stills with `isMask=0` return 7.4 MB of room.
+- **Every other route fails on this subject.** 3DGS video and 3DGS stills return
+  room-scale soups (4.6–11 m extents), the featureless mesh returns a room shell
+  around the chair, a second clip returns a bubble enclosing the chair, and a
+  sharp-frame subset inflates the backrest. Table of serials and sizes in
+  [kiri-scan.md](../kiri-scan.md).
+- **The remaining defect is the capture, not the pipeline.** The backrest is a
+  translucent knit net: KIRI's mesh is topologically closed, so the missing patch
+  has no boundary to fill, and the 3DGS route that could carry it will not
+  isolate the subject. `/jual/pindai` now states the four capture rules this
+  produced, and the result page states the caveat under the viewer.
+
+Still unproven:
+
+- A capture of a matte, solid chair: no route was tried on one, so the defect
+  may simply not occur there. This is the next honest experiment.
+- Whether Photo Scan generalises beyond two clips, and what a longer capture
+  costs in upload time.
+- KIRI key handling on the actual demo host, credit budget and retention.
+- Phone/browser and network behaviour for a real seller.
+- The in-browser camera path, deliberately deferred.
+
+## Next step
+
+Four credits are left. The cheapest decisive experiment is a **matte, solid
+upholstered chair** through the shipped default (`KIRI_MOCK=0 npm run scan:serve`)
+— same command, one credit, and it tests the diagnosis rather than repeating the
+net-back chair. Judge it on the four matched poses before spending a second
+credit. Keep the camera deferred until one capture visibly passes.

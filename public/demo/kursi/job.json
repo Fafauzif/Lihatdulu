@@ -1,0 +1,119 @@
+{
+  "id": "demo-chair",
+  "stage": "ready",
+  "provider": "kiri",
+  "mock": false,
+  "createdAt": "2026-11-23T11:17:36.648Z",
+  "updatedAt": "2026-11-23T11:54:31.135Z",
+  "completedAt": "2026-11-23T11:19:22.111Z",
+  "expiresAt": null,
+  "source": {
+    "filename": "kursi-kayu-golden101.zip",
+    "bytes": 19386097,
+    "kind": "photos",
+    "dimensions": {
+      "length": 45,
+      "width": 50,
+      "height": 85,
+      "unit": "cm"
+    },
+    "photos": 101,
+    "transcodedFrom": null
+  },
+  "input": {
+    "mode": "photo",
+    "kind": "mesh",
+    "source": "photos",
+    "photos": 101,
+    "fileFormat": "GLB",
+    "modelQuality": 3,
+    "textureQuality": 0,
+    "textureSmoothing": 0,
+    "mask": 1
+  },
+  "kiri": {
+    "serial": "d3ba9feafbd24e828f16c13cade91761",
+    "status": 2
+  },
+  "timings": {
+    "uploadMs": 745,
+    "submitMs": 11604,
+    "queueMs": null,
+    "finalizeMs": 3280,
+    "refineMs": 260,
+    "totalMs": 105463
+  },
+  "artifact": {
+    "format": "glb",
+    "bytes": 1950948,
+    "splatCount": null,
+    "triangles": 19246,
+    "url": "/demo/kursi/result.glb",
+    "refined": true,
+    "raw": {
+      "bytes": 1932024,
+      "triangles": 19246,
+      "url": "/demo/kursi/raw.glb"
+    }
+  },
+  "photos": [
+    {
+      "url": "/demo/kursi/photos/1.jpg",
+      "bytes": 237345
+    },
+    {
+      "url": "/demo/kursi/photos/2.jpg",
+      "bytes": 229906
+    },
+    {
+      "url": "/demo/kursi/photos/3.jpg",
+      "bytes": 193808
+    },
+    {
+      "url": "/demo/kursi/photos/4.jpg",
+      "bytes": 180663
+    },
+    {
+      "url": "/demo/kursi/photos/5.jpg",
+      "bytes": 140182
+    },
+    {
+      "url": "/demo/kursi/photos/6.jpg",
+      "bytes": 202423
+    },
+    {
+      "url": "/demo/kursi/photos/7.jpg",
+      "bytes": 185574
+    },
+    {
+      "url": "/demo/kursi/photos/8.jpg",
+      "bytes": 225244
+    }
+  ],
+  "refine": {
+    "status": "applied",
+    "reason": null,
+    "ms": 260,
+    "metrics": {
+      "trianglesBefore": 19246,
+      "trianglesAfter": 19246,
+      "fragmentsRemoved": 0,
+      "fragmentTrianglesRemoved": 0,
+      "boundaryLoops": 0,
+      "loopsKept": 0,
+      "gapsFilled": 0,
+      "gapTrianglesAdded": 0,
+      "scale": 1.137222,
+      "targetSize": 1,
+      "coverage": {
+        "verdict": "berlubang",
+        "holeRatioBefore": 0.187566,
+        "holeRatioAfter": 0.187566,
+        "worstAxis": "y"
+      }
+    }
+  },
+  "error": null,
+  "now": "2026-11-23T12:49:28.973Z",
+  "demo": true
+}

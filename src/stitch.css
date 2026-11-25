@@ -1474,6 +1474,35 @@ button .icon {
   max-width: 700px;
   margin: 32px 0 0;
 }
+.about-provenance {
+  max-width: 760px;
+  margin: 32px 0 0;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--ld-radius-lg);
+  background: var(--ld-surface);
+}
+.about-provenance h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+.about-provenance ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+}
+.about-provenance li {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ld-ink-soft);
+}
+.about-provenance a {
+  color: var(--ld-green-deep);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .store-heading {
   display: flex;
   align-items: center;
@@ -3194,6 +3223,20 @@ textarea {
   gap: 8px;
   margin-top: 16px;
 }
+.home-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.home-hero-actions .button {
+  min-height: 46px;
+  padding-inline: 20px;
+}
+.home-hero-actions .button.secondary {
+  border-color: var(--ld-line-strong);
+  background: var(--ld-surface);
+}
 .home-hero-link {
   display: block;
   min-width: 0;
@@ -4134,6 +4177,14 @@ dialog::backdrop {
   .home-hero-link {
     display: none;
   }
+  /* The home hero carries the search once the layout stacks. A second input in
+     the header made the phone page open with two identical search fields. */
+  body.on-home .header-search {
+    display: none;
+  }
+  body.on-home:not(.on-marketplace) .header-inner {
+    row-gap: 0;
+  }
 }
 @media (max-width: 800px) {
   .home-grid {
@@ -4241,6 +4292,16 @@ dialog::backdrop {
   .home-search-submit {
     min-height: 44px;
     padding-inline: 16px;
+  }
+  .home-hero-actions {
+    margin-top: 12px;
+  }
+  .home-hero-actions .button {
+    flex: 1 1 150px;
+    min-height: 48px;
+    justify-content: center;
+    padding-inline: 14px;
+    font-size: 14px;
   }
   .home-category-chips {
     flex-wrap: wrap;
