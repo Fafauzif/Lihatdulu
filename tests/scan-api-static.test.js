@@ -77,3 +77,19 @@ test("the deployed host answers /api with a plain 404, which is also unavailable
     });
   });
 });
+
+test("the host's numeric 404 code is unavailable, not an internal failure", async () => {
+  // Verbatim from https://lihatdulu-sooty.vercel.app/api/kiri/jobs/<id>:
+  // {"error":{"code":"404","message":"The page could not be found"}}
+  const response = new Response(
+    JSON.stringify({ error: { code: "404", message: "The page could not be found" } }),
+    { status: 404, headers: { "content-type": "application/json" } },
+  );
+  await withFetch(response, async () => {
+    await assert.rejects(getJob("8f1c3b9e-0000-4000-8000-00000000dead"), (error) => {
+      assert.equal(error.code, "unavailable");
+      assert.match(error.message, /contoh tersimpan/i);
+      return true;
+    });
+  });
+});

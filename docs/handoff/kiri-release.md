@@ -155,17 +155,20 @@ the catalogue).
 
 | Check | Command | Result |
 |---|---|---|
-| Unit suite | `npm run test:unit` | **339 tests, 338 pass, 1 skipped, 0 fail** |
+| Unit suite | `npm run test:unit` | **341 tests, 340 pass, 1 skipped, 0 fail** |
 | Marketplace acceptance | `npm run test:browser` | **26 passed, 0 failed** |
 | Scan acceptance (mocks) | `npm run test:kiri:browser` | **42/42 checks** |
 | Build | `npm run build` | green (pre-existing >500 kB warning) |
 
 A stale or unknown `/pindai/:id` link on the static host used to poll five times
-behind a spinner: Vercel answers `/api/...` with its own plain `404` page and the
-client read that as an internal failure. The result page now treats any non-JSON
-API answer as **"Alamat ini hanya menyajikan contoh tersimpan, tanpa server
-pindai"**, shows it in **278 ms** and offers **Contoh kursi asli** beside the
-retake and catalogue links.
+behind a spinner. Vercel answers an unknown `/api/...` path itself, as
+`{"error":{"code":"404","message":"The page could not be found"}}` — JSON, but
+not our API, and its numeric code was read as an internal failure. The client now
+treats a missing or numeric error code (and any non-JSON body) as
+**"Alamat ini hanya menyajikan contoh tersimpan, tanpa server pindai"**, shows it
+in **292 ms** and offers **Contoh kursi asli** beside the retake and catalogue
+links. Our own codes are words (`not_found`, `internal`, …), so a real API error
+keeps its meaning.
 
 New coverage for what the old suite missed: the saved chair opens on photos with
 the original photo directly under the tabs, an explicit model choice survives a

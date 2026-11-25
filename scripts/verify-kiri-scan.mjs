@@ -1143,12 +1143,14 @@ async function layoutFacts(page) {
   // not as five polling attempts behind a spinner.
   await check("an unknown job link on a static host says so and links the chair", async () => {
     await page.route("**/api/kiri/jobs/*", (route) =>
-      // Vercel answers /api/... with its own plain 404 page; a host behind a
-      // catch-all rewrite answers with the shell. Both mean "no scanner here".
+      // Verbatim from the deployment: Vercel answers an unknown /api path with
+      // JSON whose code is the status number. That means "no scanner here".
       route.fulfill({
         status: 404,
-        contentType: "text/plain; charset=utf-8",
-        body: "Not Found",
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: { code: "404", message: "The page could not be found" },
+        }),
       }),
     );
     const started = Date.now();
