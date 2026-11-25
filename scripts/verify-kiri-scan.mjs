@@ -1138,6 +1138,36 @@ async function layoutFacts(page) {
     return { text: text.trim() };
   });
 
+  // A stale result link on a static host gets the SPA shell instead of JSON.
+  // That must read as "no scanner here", once, with the saved chair offered —
+  // not as five polling attempts behind a spinner.
+  await check("an unknown job link on a static host says so and links the chair", async () => {
+    await page.route("**/api/kiri/jobs/*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><title>LihatDulu</title>",
+      }),
+    );
+    const started = Date.now();
+    await page.goto(base + "/pindai/8f1c3b9e-0000-4000-8000-00000000dead", {
+      waitUntil: "domcontentloaded",
+    });
+    const card = page.locator("[data-scan-error]");
+    await card.waitFor({ state: "visible", timeout: 15_000 });
+    const ms = Date.now() - started;
+    const text = (await card.innerText()).trim();
+    assert.match(text, /tanpa server pindai|contoh tersimpan/i);
+    assert.equal(
+      await card.locator("a[href='/pindai/demo-chair']").isVisible(),
+      true,
+      "the saved chair is offered from the error card",
+    );
+    assert.ok(ms < 10_000, `the static state arrived after ${ms} ms`);
+    await shot(page, "28-static-unknown-job");
+    return { ms, text: text.slice(0, 160) };
+  });
+
   await context.close();
 }
 

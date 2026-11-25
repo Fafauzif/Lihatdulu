@@ -72,6 +72,8 @@ export const ERROR_COPY = Object.freeze({
   artifact_too_large: "Hasil 3D terlalu besar untuk dibuka di ponsel.",
   submit_interrupted: "Server sempat berhenti saat mengirim video. Kirim ulang video ini.",
   not_found: "Pekerjaan pindai tidak ditemukan.",
+  unavailable:
+    "Alamat ini hanya menyajikan contoh tersimpan, tanpa server pindai. Contoh kursi asli tetap bisa dibuka.",
   conflict: "Pekerjaan ini belum bisa dicoba ulang.",
   network: "Sambungan terputus. Periksa jaringan lalu coba lagi.",
   aborted: "Pengiriman dibatalkan.",
@@ -283,6 +285,20 @@ async function parseError(response) {
   );
 }
 
+// A static host answers /api/... with the SPA shell instead of JSON. That is not
+// a broken job: the origin has no scan server, and the saved example is the way
+// forward. Fail fast and say so instead of polling five times.
+async function readJson(response) {
+  const type = response.headers.get("content-type") || "";
+  if (!/json/i.test(type))
+    throw new ScanApiError("unavailable", ERROR_COPY.unavailable);
+  try {
+    return await response.json();
+  } catch {
+    throw new ScanApiError("unavailable", ERROR_COPY.unavailable);
+  }
+}
+
 export async function getScanConfig({ signal } = {}) {
   let response;
   try {
@@ -291,7 +307,7 @@ export async function getScanConfig({ signal } = {}) {
     throw new ScanApiError("network", ERROR_COPY.network);
   }
   if (!response.ok) throw await parseError(response);
-  return response.json();
+  return readJson(response);
 }
 
 export async function getJob(id, { signal } = {}) {
@@ -306,7 +322,7 @@ export async function getJob(id, { signal } = {}) {
     throw new ScanApiError("network", ERROR_COPY.network);
   }
   if (!response.ok) throw await parseError(response);
-  return response.json();
+  return readJson(response);
 }
 
 export async function refineJob(id) {
@@ -320,7 +336,7 @@ export async function refineJob(id) {
     throw new ScanApiError("network", ERROR_COPY.network);
   }
   if (!response.ok) throw await parseError(response);
-  return response.json();
+  return readJson(response);
 }
 
 export async function retryJob(id) {
@@ -334,7 +350,7 @@ export async function retryJob(id) {
     throw new ScanApiError("network", ERROR_COPY.network);
   }
   if (!response.ok) throw await parseError(response);
-  return response.json();
+  return readJson(response);
 }
 
 // XHR instead of fetch: the upload bar needs progress events, which fetch does

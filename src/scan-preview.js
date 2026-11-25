@@ -406,6 +406,16 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
         paintMissing();
         return;
       }
+      if (error?.code === "unavailable") {
+        // A static host has no scan server. Say that once, and keep the saved
+        // example reachable instead of retrying into a spinner.
+        errorCard.hidden = false;
+        errorText.textContent = errorCopy("unavailable");
+        placeholder.hidden = false;
+        placeholder.textContent = "Hasil ini butuh server pindai.";
+        placeholder.dataset.tone = "error";
+        return;
+      }
       if (state.attempt >= 5) {
         errorCard.hidden = false;
         errorText.textContent = errorCopy(error?.code, error?.message);
