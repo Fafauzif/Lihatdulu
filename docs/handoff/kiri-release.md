@@ -94,3 +94,86 @@ docker run -p 8787:8787 -e KIRI_API_KEY=... -v lihatdulu-jobs:/app/var/kiri liha
 Expected: the recording is accepted, the job shows upload → queue → processing,
 the result opens at `/pindai/:id`, and a refresh resumes the same job. Server
 logs carry the serial and timings; the key stays in the environment.
+
+## Judge-path polish and measured performance — 2026-11-25
+
+Same branch, same stack (Vite, plain JS, Three.js, Plus Jakarta Sans, white
+surfaces, forest-green accents). Nothing was rebranded; the changes remove
+duplicate controls, make the evidence reachable, and keep the 3D payload off the
+pages that do not need it.
+
+| Area | Change |
+|---|---|
+| Home, phone | One search control instead of two (the header field steps aside at ≤900 px), with **Jelajahi katalog** and **Coba Lemari Sora 3D** directly under it. |
+| Sora | The media tabs now name the evidence: **Gambar (n)**, **Putar 3D**, **Coba di ruang**, **Kondisi (n)**. On a phone they sit in an even 2×2 grid instead of a row of three plus one full-width tab. |
+| Purchase bar | At ≤700 px the fixed bar can no longer cover the 3D toolbar, motion toggles or room actions: the stage reserves its height, and the controls keep a scroll margin. |
+| Seller | `/jual` opens with two clearly different paths — **Contoh disiapkan · Panduan video Sora** (no upload, no credits) beside **Pindai baru · Pindai furnitur dari video** (needs the scan host and credits, links the saved chair). |
+| Saved chair | `/pindai/demo-chair` shows the original photo directly under the source tabs when **Foto asli** is chosen, keeps the raw and refined models one tap away, and moves provenance and limitations into one short summary plus a collapsed detail list. |
+| Source choice | Photos-first on a fresh visit; an explicit tab choice is remembered per result and survives a reload. The tablist keeps focus and supports Arrow/Home/End. |
+| Honest copy | The refinement note no longer repeats the summary. Dimensions are labelled as the seller's, not measured. The 18,8 % see-through silhouette and the black mesh chair stay stated. `/tentang` now separates the authored Sora demo, the saved real scan, the simulated commerce and the fact that live scanning needs its own host. |
+| Static host | Without `/api/kiri` the upload page states **Demo statis — pindai langsung belum aktif di alamat ini**, disables camera and file submission with an accessible description, and leads with **Buka contoh kursi asli**. |
+| Performance | The Spark/SPZ runtime moved to `scan-splat.js` and is imported only when an SPZ opens. A GLB page downloads `scan-viewer` (4.78 kB) instead of the old 2.71 MB bundle. |
+
+### Measured on the same routes and viewport (390×844, `vite preview`, CDP bytes)
+
+| Route | `origin/main` `8b404df` | This branch |
+|---|---|---|
+| `/` | 453 kB | 454 kB |
+| `/beli` | 660 kB | 661 kB |
+| `/barang/sora` | 475 kB | 476 kB |
+| `/barang/sora?tab=model` | 5 213 kB | 5 214 kB |
+| `/barang/sora?tab=room` | 4 896 kB | 4 897 kB |
+| `/jual` | 567 kB | **445 kB** |
+| `/jual/pindai` | 127 kB | 129 kB |
+| `/pindai/demo-chair` (photos) | 1 685 kB | 1 688 kB |
+| `/tentang` | 108 kB | 109 kB |
+
+Home, catalogue and the Sora product page still ship **no 3D**: 54 kB of
+JavaScript, the same files as before. The ~1 kB deltas are the new copy and CSS.
+
+The saved chair with **Hasil halus** opened (the tab that actually mounts 3D):
+
+| | Before | After |
+|---|---|---|
+| Total transfer | 4 686 kB | **3 764 kB** (−922 kB, −20 %) |
+| JavaScript | 1 161 kB | **238 kB** (−923 kB, −79 %) |
+| `scan-splat` requested for a GLB | n/a | **no** (asserted in the suite) |
+| Stage ready under SwiftShader | 4 561 ms | 4 358 ms |
+
+The photos (1 606 kB) and the 1 905 kB refined GLB are unchanged; the saving is
+the Spark runtime the GLB page no longer parses or downloads.
+
+### Widths checked
+
+`320`, `390`, `768`, `1440`: no page-level horizontal overflow on any route
+(`documentElement.scrollWidth` equals the viewport, 310/320 … 1430/1440 with the
+scrollbar). The only elements past the right edge are inside the intended
+horizontal rails (`gallery-thumb` on the product page, `quick-filter` chips on
+the catalogue).
+
+### Verified on this pass
+
+| Check | Command | Result |
+|---|---|---|
+| Unit suite | `npm run test:unit` | **335 tests, 334 pass, 1 skipped, 0 fail** |
+| Marketplace acceptance | `npm run test:browser` | **26 passed, 0 failed** |
+| Scan acceptance (mocks) | `npm run test:kiri:browser` | **41/41 checks** |
+| Build | `npm run build` | green (pre-existing >500 kB warning) |
+
+New coverage for what the old suite missed: the saved chair opens on photos with
+the original photo directly under the tabs, an explicit model choice survives a
+reload, keyboard focus stays on the tablist while the source changes, a GLB never
+requests `scan-splat`, a slow model keeps the tabs and the 18,8 % limit visible
+and the photos one tap away, leaving the page mid-upload cancels the send without
+creating a job, and a host without `/api/kiri` shows the static state with the
+saved chair.
+
+### Flake seen and handled
+
+The observation harness hit `Page.captureScreenshot: Unable to capture
+screenshot` once, at 320 px on `/barang/sora` under SwiftShader; the same
+focused run passed immediately afterwards with no page errors, and the scan
+suite's own screenshots at that width pass. Separately, the camera check read the
+recording facts while the video probe was still running and saw `memuat detail
+video…`; it now waits for the recovered length before asserting, which is a test
+fix, not an app change.

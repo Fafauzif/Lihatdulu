@@ -453,3 +453,52 @@
     flex: 1 1 45%;
   }
 }
+
+/* Static host: no API behind this origin. The flow stays visible so a judge can
+   read what it does, but the panel says plainly that nothing can be sent and
+   leads with the saved real scan instead. */
+.scan-static {
+  margin: 16px 0 0;
+  padding: 16px 18px;
+  border: 1px solid var(--ld-green-line);
+  border-radius: var(--ld-radius-lg);
+  background: var(--ld-green-tint);
+}
+
+.scan-static[hidden] {
+  display: none;
+}
+
+.scan-static h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.scan-static p {
+  margin: 0 0 12px;
+  max-width: 62ch;
+  color: var(--ld-ink-soft);
+  font-size: var(--ld-text-sm);
+  line-height: 1.6;
+}
+
+.scan-static .scan-link-button {
+  min-height: 48px;
+  padding-inline: 18px;
+}
+
+.scan-static .scan-static-note {
+  margin: 12px 0 0;
+  color: var(--ld-ink-muted);
+  font-size: var(--ld-text-xs);
+}
+
+.scan-source:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.scan-source.primary:disabled {
+  background: var(--ld-ink-muted);
+}

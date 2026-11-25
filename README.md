@@ -10,17 +10,21 @@ runbook for the live scan host.
 
 ## Judge walkthrough (5 minutes, no account, no key)
 
-1. **Buyer début — `/`** → the catalogue. Open `/barang/sora` for the prepared
+1. **Buyer walkthrough — `/`** → the catalogue. Open `/barang/sora` for the prepared
    cabinet: original photos, condition notes, seller measurements, and the
-   prepared Sora video walkthrough with room placement.
+   prepared Sora video walkthrough with room placement. **Putar 3D** and **Coba
+   di ruang** sit beside **Gambar** and **Kondisi (3)**.
 2. **Saved real scan — `/pindai/demo-chair`** → a real chair captured on a phone,
-   scanned by KIRI, cleaned locally. It opens on **Foto asli** because the mesh
-   has a hole in the backrest; the **Hasil 3D** and **Pindai asli** tabs stay one
-   tap away. Nothing here contacts KIRI.
+   scanned by KIRI, cleaned locally. It opens on **Foto asli** with the original
+   photo directly under the tabs, because the mesh still sees through its mesh
+   back (18,8 % of the silhouette). **Hasil halus** and **Pindaian asli** stay one
+   tap away, and an explicit tab choice survives a reload of this result.
+   Nothing here contacts KIRI.
 3. **Your own scan — `/jual/pindai`** → record with the rear camera or pick a
    video. The page explains the cloud upload, asks for explicit consent, shows
    upload/queue/processing stages, and opens `/pindai/:id`. Refreshing resumes
-   the same job instead of submitting again.
+   the same job instead of submitting again. On the static public site the page
+   says **Demo statis** instead, disables sending, and leads with the saved chair.
 
 Mock mode is labelled *Mode simulasi* on screen and spends no credits; live mode
 is labelled by the reason line under the viewer. The offline chair explorer is

@@ -211,6 +211,18 @@ test("the upload page carries the measured capture guidance", () => {
   assert.match(html, /kolom di bawah dudukan/);
 });
 
+test("the upload page has a static-host state that leads with the saved chair", () => {
+  const html = renderScanUpload();
+  assert.match(html, /data-scan-static[^>]*hidden/);
+  assert.match(html, /Demo statis/);
+  assert.match(html, /Pindai langsung belum aktif/);
+  assert.match(html, /Tanpa unggah dan tanpa kredit/);
+  assert.match(html, /host Node \+ FFmpeg dengan kunci KIRI/);
+  // The saved chair is reachable twice: the static panel and the page head.
+  const links = [...html.matchAll(/href="\/pindai\/demo-chair"/g)];
+  assert.ok(links.length >= 2, "saved example must be one tap from either state");
+});
+
 test("the result page embeds the existing SPZ viewer and both actions", () => {
   const html = renderScanPreview();
   assert.match(html, /class="scan-viewer" data-scan-viewer/);
@@ -221,6 +233,17 @@ test("the result page embeds the existing SPZ viewer and both actions", () => {
   // The measured caveat ships with the viewer, not only in the docs.
   assert.match(html, /data-scan-caveat/);
   assert.match(html, /bahan tembus cahaya dapat berlubang/);
+  // Evidence first: the original photo sits between the tabs and the viewer,
+  // and the short provenance line is a sibling of that evidence.
+  const tabs = html.indexOf("data-scan-tabs");
+  const photos = html.indexOf("data-scan-photos");
+  const viewer = html.indexOf("data-scan-viewer");
+  const summary = html.indexOf("data-scan-summary");
+  assert.ok(tabs > -1 && photos > tabs, "photos come after the tabs");
+  assert.ok(viewer > photos, "the viewer follows the photo block");
+  assert.ok(summary > viewer, "the summary follows the evidence");
+  assert.match(html, /data-scan-photo-hero/);
+  assert.match(html, /data-scan-open-photos/);
 });
 
 test("result details label mock results honestly and hide long serials", () => {

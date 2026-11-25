@@ -5,7 +5,6 @@ import {
   STAGE_LABELS,
   errorCopy,
   formatBytes,
-  formatDuration,
   getJob,
   isTerminalStage,
   nextPollDelay,
@@ -16,10 +15,12 @@ import {
 import {
   detailRows,
   hasPoorCoverage,
-  holeShare,
-  preferredSource,
+  provenanceSummary,
+  readSourceChoice,
   refineNote,
+  resolveSource,
   sourceOptions,
+  writeSourceChoice,
 } from "./scan-views.js";
 
 export { renderScanPreview } from "./scan-views.js";
@@ -28,8 +29,9 @@ export { renderScanPreview } from "./scan-views.js";
 // URL resumes polling (or shows the finished model) without a new submission.
 //
 // A finished mesh job has up to three sources: the refined preview, KIRI's own
-// scan and the seller's photos. The refined one is preselected, but the buyer
-// can always reach the raw scan and the photos from the same page.
+// scan and the seller's photos. Photos open first when the mesh sees through
+// itself, but the buyer can always reach the raw scan and the photos from the
+// same page, and the tab they pick is remembered for this result.
 
 // A saved, already-paid chair scan ships with the app so a judge can open a
 // real result without spending a credit or waiting. Its job record is a static
@@ -47,6 +49,14 @@ export async function loadDemoJob(fetchImpl = fetch) {
   return response.json();
 }
 
+function browserStorage() {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
   const host = root.matches?.("[data-scan-preview]") ? root : root.querySelector("[data-scan-preview]");
   if (!host) return () => {};
@@ -59,20 +69,27 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
   const stages = [...host.querySelectorAll("[data-scan-stage]")];
   const note = q("[data-scan-note]");
   const statusCard = q("[data-scan-status]");
-  const provenance = q("[data-scan-provenance]");
   const details = q("[data-scan-details]");
+  const summary = q("[data-scan-summary]");
+  const summarySource = q("[data-scan-summary-source]");
+  const summaryLimits = q("[data-scan-summary-limits]");
   const errorCard = q("[data-scan-error]");
   const errorText = q("[data-scan-error-text]");
   const retryButton = q("[data-scan-retry]");
   const refineButton = q("[data-scan-refine]");
   const tabs = q("[data-scan-tabs]");
+  const evidence = q("[data-scan-evidence]");
   const caveat = q("[data-scan-caveat]");
   const hint = q("[data-scan-hint]");
   const refineLine = q("[data-scan-refine-note]");
   const photosPanel = q("[data-scan-photos]");
+  const photoHero = q("[data-scan-photo-hero]");
+  const photoHeroLabel = q("[data-scan-photo-hero-label]");
   const photoGrid = q("[data-scan-photo-grid]");
   const openReason = q("[data-scan-open-reason]");
   const openModel = q("[data-scan-open-model]");
+  const openPhotos = q("[data-scan-open-photos]");
+  const storage = browserStorage();
 
   const controller = new AbortController();
   const { signal } = controller;
@@ -84,6 +101,7 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
     job: null,
     source: null,
     mountedFor: null,
+    tabsKey: null,
   };
 
   function clearTimer() {
@@ -142,12 +160,21 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
 
   function paintPhotos(dto) {
     const photos = dto.photos ?? [];
+    const [hero, ...rest] = photos;
+    photosPanel.hidden = !photos.length || state.source !== "photos";
+    if (hero) {
+      photoHero.src = hero.url;
+      photoHero.alt = `Foto asli kursi dari penjual, tampak 1 dari ${photos.length}`;
+      photoHero.width = 960;
+      photoHero.height = 1280;
+      photoHeroLabel.textContent = `Foto asli 1 dari ${photos.length}`;
+    }
     photoGrid.replaceChildren(
-      ...photos.map((photo, index) => {
+      ...rest.map((photo, index) => {
         const item = document.createElement("li");
         const image = document.createElement("img");
         image.src = photo.url;
-        image.alt = `Foto asli barang ${index + 1}`;
+        image.alt = `Foto asli barang ${index + 2}`;
         image.loading = "lazy";
         image.width = 480;
         image.height = 360;
@@ -160,40 +187,69 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
     );
     openModel.hidden = !modelOption || state.source !== "photos";
     openModel.textContent = modelOption?.id === "raw" ? "Buka pindaian asli" : PREVIEW_COPY.openModel;
-    photosPanel.hidden = !photos.length || state.source !== "photos";
+    openPhotos.hidden = !photos.length || state.source === "photos";
   }
 
-  function paintSources(dto) {
-    const options = sourceOptions(dto);
-    const available = options.map((option) => option.id);
-    if (!available.includes(state.source)) state.source = preferredSource(dto);
+  function selectSource(sourceId, { focus = false } = {}) {
+    const option = sourceOptions(state.job).find((item) => item.id === sourceId);
+    if (!option || state.source === sourceId) {
+      if (focus) tabs.querySelector(`[data-scan-source="${sourceId}"]`)?.focus();
+      return;
+    }
+    state.source = sourceId;
+    writeSourceChoice(storage, id, sourceId);
+    paintSources(state.job);
+    if (focus) tabs.querySelector(`[data-scan-source="${sourceId}"]`)?.focus();
+  }
 
-    tabs.hidden = options.length < 2;
+  function buildTabs(options) {
+    const key = options.map((option) => `${option.id}:${option.label}`).join("|");
+    if (key === state.tabsKey) return;
+    state.tabsKey = key;
+    const focused = document.activeElement?.dataset?.scanSource;
     tabs.replaceChildren(
       ...options.map((option) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "scan-source-tab";
+        button.id = `scan-tab-${option.id}`;
         button.dataset.scanSource = option.id;
         button.setAttribute("role", "tab");
-        button.setAttribute("aria-selected", String(option.id === state.source));
+        button.setAttribute("aria-controls", "scan-evidence");
         button.textContent = option.label;
-        button.addEventListener(
-          "click",
-          () => {
-            if (state.source === option.id) return;
-            state.source = option.id;
-            paintSources(state.job);
-          },
-          { signal },
-        );
+        button.addEventListener("click", () => selectSource(option.id, { focus: true }), {
+          signal,
+        });
         return button;
       }),
     );
+    if (focused && tabs.querySelector(`[data-scan-source="${focused}"]`))
+      tabs.querySelector(`[data-scan-source="${focused}"]`).focus();
+  }
+
+  function paintSources(dto) {
+    const options = sourceOptions(dto);
+    const available = options.map((option) => option.id);
+    if (!available.includes(state.source))
+      state.source = resolveSource(dto, readSourceChoice(storage, id));
+    buildTabs(options);
+    tabs.hidden = options.length < 2;
+    for (const tab of tabs.querySelectorAll('[role="tab"]')) {
+      const selected = tab.dataset.scanSource === state.source;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    }
+    if (options.length > 1)
+      evidence.setAttribute("aria-labelledby", `scan-tab-${state.source}`);
+    else {
+      evidence.removeAttribute("aria-labelledby");
+      evidence.setAttribute("aria-label", "Bukti pindai");
+    }
 
     const active = options.find((option) => option.id === state.source) ?? null;
     caveat.textContent = active?.caveat ?? PREVIEW_COPY.caveat;
-    caveat.hidden = !active;
+    // The photo hero already carries its own caption.
+    caveat.hidden = !active || active.id === "photos";
     hint.hidden = active?.id === "photos";
     viewerHost.hidden = active?.id === "photos";
     if (active?.id === "photos") {
@@ -206,9 +262,30 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
     paintPhotos(dto);
   }
 
+  function paintSummary(dto) {
+    const summaryCopy = provenanceSummary(dto);
+    summarySource.textContent = summaryCopy.source;
+    summaryLimits.replaceChildren(
+      ...summaryCopy.limits.map((text) => {
+        const item = document.createElement("li");
+        item.textContent = text;
+        return item;
+      }),
+    );
+    summary.hidden = !summaryCopy.source;
+    details.innerHTML = detailRows(dto)
+      .map(([term, value]) => `<dt>${term}</dt><dd>${value}</dd>`)
+      .join("");
+  }
+
   function paintJob(dto) {
     state.job = dto;
-    title.textContent = dto.stage === "ready" ? "Model 3D hasil pindai" : "Pindai furnitur";
+    title.textContent =
+      dto.stage === "ready"
+        ? dto.demo === true
+          ? "Kursi jaring hitam, hasil pindai"
+          : "Model 3D hasil pindai"
+        : "Pindai furnitur";
     provider.textContent = dto.mock
       ? "Mode simulasi: hasil ini dibuat lokal untuk menguji alur, bukan dari KIRI Engine."
       : PREVIEW_COPY.modelNote;
@@ -225,14 +302,10 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
       statusCard.hidden = true;
       const seeThrough =
         hasPoorCoverage(dto) && (dto.photos ?? []).length
-          ? `Model ini masih tembus pandang di ${holeShare(dto.refine?.coverage?.holeRatioAfter)} siluetnya, jadi halaman ini membuka foto asli lebih dulu. Tab model 3D tetap tersedia.`
+          ? "Dibuka di foto asli karena model masih berlubang. Ketiga sumber ada di tab di atas."
           : "";
       openReason.textContent = seeThrough;
       openReason.hidden = !seeThrough;
-      provenance.hidden = false;
-      details.innerHTML = detailRows(dto)
-        .map(([term, value]) => `<dt>${term}</dt><dd>${value}</dd>`)
-        .join("");
       // A mesh has triangles, a splat cloud has points; say which one this is
       // instead of printing "0 splat" for a GLB.
       const parts =
@@ -240,10 +313,18 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
           ? [
               `${Number(dto.artifact?.triangles ?? 0).toLocaleString("id-ID")} segitiga`,
               dto.artifact?.refined ? "model disempurnakan" : "mesh",
+              `GLB ${formatBytes(dto.artifact?.bytes)}`,
             ]
-          : [`${Number(dto.artifact?.splatCount ?? 0).toLocaleString("id-ID")} splat`];
-      facts.textContent = `${parts.join(" · ")} · ${formatBytes(dto.artifact?.bytes)} · diproses ${formatDuration(Math.round((dto.timings?.totalMs ?? 0) / 1000))}`;
-      refineLine.textContent = refineNote(dto);
+          : [
+              `${Number(dto.artifact?.splatCount ?? 0).toLocaleString("id-ID")} splat`,
+              `SPZ ${formatBytes(dto.artifact?.bytes)}`,
+            ];
+      facts.textContent = parts.join(" · ");
+      // The summary already states the limitation in short form, and the
+      // technical rows keep the numbers; only a non-applied refine stage needs
+      // its own sentence.
+      refineLine.textContent =
+        dto.refine?.status === "applied" ? "" : refineNote(dto);
       refineLine.hidden = !refineLine.textContent;
       // The refine stage is free to retry from the saved GLB, so it is offered
       // whenever it did not apply and the job kept KIRI's mesh.
@@ -254,13 +335,14 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
           dto.artifact?.raw &&
           dto.refine?.status !== "applied"
         );
+      paintSummary(dto);
       paintSources(dto);
       placeholder.hidden = viewerHost.dataset.state === "ready" || state.source === "photos";
       return;
     }
 
     statusCard.hidden = false;
-    provenance.hidden = true;
+    summary.hidden = true;
     openReason.hidden = true;
     refineLine.hidden = true;
     refineButton.hidden = true;
@@ -296,7 +378,7 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
     facts.textContent = PREVIEW_COPY.notFoundNote;
     provider.textContent = "";
     statusCard.hidden = true;
-    provenance.hidden = true;
+    summary.hidden = true;
     errorCard.hidden = true;
     refineLine.hidden = true;
     refineButton.hidden = true;
@@ -336,6 +418,27 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
     }
   }
 
+  tabs.addEventListener(
+    "keydown",
+    (event) => {
+      const current = tabs.querySelector('[role="tab"][aria-selected="true"]');
+      if (!current) return;
+      const list = [...tabs.querySelectorAll('[role="tab"]')];
+      const index = list.indexOf(current);
+      let next = null;
+      if (event.key === "ArrowRight") next = list[(index + 1) % list.length];
+      else if (event.key === "ArrowLeft")
+        next = list[(index - 1 + list.length) % list.length];
+      else if (event.key === "Home") next = list[0];
+      else if (event.key === "End") next = list[list.length - 1];
+      if (!next) return;
+      event.preventDefault();
+      selectSource(next.dataset.scanSource);
+      next.focus();
+    },
+    { signal },
+  );
+
   openModel.addEventListener(
     "click",
     () => {
@@ -343,9 +446,17 @@ export function mountScanPreview(root, { id, onToast = () => {} } = {}) {
         (candidate) => candidate.format,
       );
       if (!option) return;
-      state.source = option.id;
-      paintSources(state.job);
+      selectSource(option.id, { focus: true });
       viewerHost.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    },
+    { signal },
+  );
+
+  openPhotos.addEventListener(
+    "click",
+    () => {
+      selectSource("photos", { focus: true });
+      photosPanel.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
     },
     { signal },
   );

@@ -1,10 +1,5 @@
 import "./scan-viewer.css";
 import * as THREE from "three";
-import {
-  SparkControls,
-  SparkRenderer,
-  SplatMesh,
-} from "@sparkjsdev/spark";
 
 // A dedicated viewer with its own renderer. It is deliberately separate from
 // the GLB inspection engine: splats and authored meshes do not share a canvas.
@@ -14,6 +9,10 @@ import {
 // their own chair. The GLB path is a plain three.js scene with orbit controls and
 // generous lighting, because a reconstructed shell has no environment light of
 // its own and its materials are single-sided.
+//
+// Spark is 2.7 MB minified and only an SPZ needs it, so that runtime lives in
+// ./scan-splat.js and is imported on demand. A GLB — the saved chair demo, for
+// example — never pays for it.
 
 // Where the default camera stands for a mesh. KIRI's Photo Scan crops the
 // subject itself, so the mesh is the chair rather than the room; the
@@ -54,9 +53,7 @@ export function mountScanViewer(
   let renderer = null;
   let scene = null;
   let camera = null;
-  let spark = null;
-  let splat = null;
-  let controls = null;
+  let splatView = null;
   let orbit = null;
   let model = null;
   let visible = true;
@@ -109,6 +106,10 @@ export function mountScanViewer(
       frameModel();
       return;
     }
+    if (splatView) {
+      splatView.resize(fitRadius);
+      return;
+    }
     const vertical = THREE.MathUtils.degToRad(camera.fov);
     const horizontal = 2 * Math.atan(Math.tan(vertical / 2) * camera.aspect);
     const distance = fitRadius / Math.sin(Math.min(vertical, horizontal) / 2);
@@ -122,7 +123,7 @@ export function mountScanViewer(
   function loop() {
     if (disposed) return;
     if (orbit) orbit.update();
-    else controls?.update(camera);
+    else splatView?.update();
     renderer.render(scene, camera);
   }
 
@@ -239,41 +240,23 @@ export function mountScanViewer(
     );
   }
 
-  function mountSplat() {
-    spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-    splat = new SplatMesh({
+  async function mountSplat() {
+    const module = await import("./scan-splat.js");
+    if (disposed) return;
+    splatView = module.mountSplatView({
+      renderer,
+      scene,
+      camera,
       url,
       onProgress: progressHandler(),
-    });
-    scene.add(splat);
-    controls = new SparkControls({ canvas });
-    observer = new ResizeObserver(resize);
-    observer.observe(host);
-    intersection = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      if (!renderer) return;
-      renderer.setAnimationLoop(visible ? loop : null);
-    });
-    intersection.observe(host);
-    resize();
-
-    void splat.initialized
-      .then(() => {
-        if (disposed) return;
-        const box = splat.getBoundingBox(true);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        fitRadius = Math.max(size.length() / 2, 0.02);
-        // KIRI exports the splats in the same orientation as the source model.
-        // Centre the box in world space so a future mesh rotation stays framed.
-        const offset = center.clone().applyQuaternion(splat.quaternion);
-        splat.position.copy(offset).multiplyScalar(-1);
+      onReady: ({ fitRadius: radius, splats }) => {
+        fitRadius = Math.max(radius, 0.02);
+        host.dataset.splats = String(splats);
         resize();
-        host.dataset.splats = String(splat.numSplats ?? 0);
         ready();
-      })
-      .catch(fail);
+      },
+      onFail: fail,
+    });
   }
 
   try {
@@ -292,20 +275,18 @@ export function mountScanViewer(
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+    observer = new ResizeObserver(resize);
+    observer.observe(host);
+    // Both formats pause their loop when the viewer scrolls out of view.
+    intersection = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      if (!renderer) return;
+      renderer.setAnimationLoop(visible ? loop : null);
+    });
+    intersection.observe(host);
 
-    if (format === "glb") {
-      observer = new ResizeObserver(resize);
-      observer.observe(host);
-      intersection = new IntersectionObserver(([entry]) => {
-        visible = entry.isIntersecting;
-        if (!renderer) return;
-        renderer.setAnimationLoop(visible ? loop : null);
-      });
-      intersection.observe(host);
-      void mountModel().catch(fail);
-    } else {
-      mountSplat();
-    }
+    if (format === "glb") void mountModel().catch(fail);
+    else void mountSplat().catch(fail);
   } catch (error) {
     fail(error);
   }
@@ -336,10 +317,7 @@ export function mountScanViewer(
       });
     } catch {}
     try {
-      splat?.dispose();
-    } catch {}
-    try {
-      spark?.dispose();
+      splatView?.dispose();
     } catch {}
     try {
       scene?.environment?.dispose?.();

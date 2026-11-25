@@ -130,6 +130,7 @@ export function mountScanUpload(root, { onNavigate = () => {}, onToast = () => {
   const submitButton = q("[data-scan-submit]");
   const configNote = q("[data-scan-config-note]");
   const modeBanner = q("[data-scan-mode]");
+  const staticPanel = q("[data-scan-static]");
   const jobPanel = q("[data-scan-job]");
   const jobTitle = q("[data-scan-job-title]");
   const jobBadge = q("[data-scan-job-badge]");
@@ -617,10 +618,19 @@ export function mountScanUpload(root, { onNavigate = () => {}, onToast = () => {
     })
     .catch(() => {
       if (state.disposed) return;
-      modeBanner.hidden = false;
-      modeBanner.dataset.tone = "warning";
-      modeBanner.textContent = "Server pindai belum bisa dihubungi. Periksa apakah proses API berjalan.";
+      // No API on this origin (a static host, e.g. the Vercel deployment). Say
+      // what that means in one place, keep the flow visible, and lead with the
+      // saved chair so a visitor still reaches a real result.
+      modeBanner.hidden = true;
+      host.dataset.mode = "static";
+      staticPanel.hidden = false;
       submitButton.disabled = true;
+      choose.disabled = true;
+      openCamera.disabled = true;
+      choose.setAttribute("aria-describedby", "scan-static-note");
+      openCamera.setAttribute("aria-describedby", "scan-static-note");
+      staticPanel.querySelector(".scan-static-note")?.setAttribute("id", "scan-static-note");
+      if (configNote) configNote.hidden = true;
     });
   void restore();
 

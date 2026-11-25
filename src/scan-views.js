@@ -52,6 +52,13 @@ export function renderScanUpload() {
       <h1>Pindai furniturmu.</h1>
       <p class="scan-lede">Rekam satu putaran pelan, atau pilih video yang sudah ada. Video dikirim ke KIRI Engine dan kembali sebagai model 3D yang bisa diputar pembeli.</p>
       <p class="scan-mode" data-scan-mode hidden></p>
+      <div class="scan-static" data-scan-static hidden>
+        <p class="scan-eyebrow">Demo statis</p>
+        <h2>Pindai langsung belum aktif di alamat ini</h2>
+        <p>Alamat ini menyajikan aplikasi tanpa server pindai, jadi rekaman tidak bisa dikirim. Contoh hasil nyata tetap bisa dibuka sekarang.</p>
+        <a class="scan-link-button primary" href="/pindai/demo-chair" data-nav>${icon("cube")} Buka contoh kursi asli</a>
+        <p class="scan-static-note">Tanpa unggah dan tanpa kredit. Pemindaian baru membutuhkan host Node + FFmpeg dengan kunci KIRI milik operator.</p>
+      </div>
       <p class="scan-example-link">${icon("cube")}<a href="/pindai/demo-chair" data-nav>Lihat contoh hasil dari kursi asli</a><span>· tanpa kredit, tanpa unggah</span></p>
     </header>
 
@@ -173,32 +180,45 @@ export function renderScanPreview() {
     <div class="scan-preview-grid">
       <div class="scan-preview-main">
         <div class="scan-source-tabs" data-scan-tabs role="tablist" aria-label="Sumber pratinjau" hidden></div>
-        <div class="scan-viewer" data-scan-viewer data-state="idle">
-          <p class="scan-viewer-placeholder" data-scan-viewer-placeholder>Menunggu model siap…</p>
+        <div class="scan-evidence" data-scan-evidence role="tabpanel" aria-label="Bukti pindai" tabindex="0">
+          <section class="scan-photos" data-scan-photos hidden>
+            <figure class="scan-photo-hero">
+              <img data-scan-photo-hero alt="Foto asli kursi dari penjual" width="960" height="1280" loading="eager" decoding="async">
+              <figcaption><span data-scan-photo-hero-label>Foto asli</span><small>Difoto dengan ponsel penjual, bukan render 3D.</small></figcaption>
+            </figure>
+            <div class="scan-photos-head">
+              <div>
+                <h2>${PREVIEW_COPY.photosHeading}</h2>
+                <p class="scan-photos-note">${PREVIEW_COPY.photosNote}</p>
+              </div>
+              <button type="button" class="scan-link-button primary" data-scan-open-model>${PREVIEW_COPY.openModel}</button>
+            </div>
+            <ul class="scan-photo-grid" data-scan-photo-grid></ul>
+          </section>
+          <div class="scan-viewer" data-scan-viewer data-state="idle">
+            <p class="scan-viewer-placeholder" data-scan-viewer-placeholder>Menunggu model siap…</p>
+          </div>
         </div>
-        <p class="scan-viewer-hint-line" data-scan-hint>${PREVIEW_COPY.hint}</p>
+        <div class="scan-viewer-foot">
+          <p class="scan-viewer-hint-line" data-scan-hint>${PREVIEW_COPY.hint}</p>
+          <button type="button" class="scan-link-button" data-scan-open-photos hidden>Lihat foto asli</button>
+        </div>
+        <section class="scan-summary" data-scan-summary hidden aria-label="Asal dan batas hasil">
+          <p class="scan-summary-source" data-scan-summary-source></p>
+          <ul class="scan-summary-limits" data-scan-summary-limits></ul>
+          <details class="scan-details">
+            <summary>Rincian teknis</summary>
+            <dl data-scan-details></dl>
+          </details>
+        </section>
         <p class="scan-viewer-caveat" data-scan-caveat>${PREVIEW_COPY.caveat}</p>
         <p class="scan-refine-note" data-scan-refine-note hidden></p>
-        <section class="scan-photos" data-scan-photos hidden>
-          <div class="scan-photos-head">
-            <div>
-              <h2>${PREVIEW_COPY.photosHeading}</h2>
-              <p class="scan-photos-note">${PREVIEW_COPY.photosNote}</p>
-            </div>
-            <button type="button" class="scan-link-button primary" data-scan-open-model hidden>${PREVIEW_COPY.openModel}</button>
-          </div>
-          <ul class="scan-photo-grid" data-scan-photo-grid></ul>
-        </section>
       </div>
       <aside class="scan-preview-side">
         <section class="scan-card" data-scan-status>
           <h2>Proses</h2>
           <ol class="scan-stages" data-scan-stages>${stageListMarkup()}</ol>
           <p class="scan-card-note" data-scan-note>Memuat status pekerjaan…</p>
-        </section>
-        <section class="scan-card scan-provenance" data-scan-provenance hidden>
-          <h2>Rincian hasil</h2>
-          <dl data-scan-details></dl>
         </section>
         <section class="scan-card" data-scan-error hidden>
           <h2>Belum bisa dibuka</h2>
@@ -295,6 +315,88 @@ export function holeShare(ratio) {
   return `${(value * 100).toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`;
 }
 
+function holeShareOf(dto) {
+  return holeShare(
+    dto?.refine?.coverage?.holeRatioAfter ??
+      dto?.refine?.metrics?.coverage?.holeRatioAfter,
+  );
+}
+
+// The source choice belongs to the buyer of this result, not to the page: a
+// fresh visit keeps the honest default (photos when the mesh sees through
+// itself), while an explicit tap survives a reload of the same result.
+export const SOURCE_STORAGE_PREFIX = "lihatdulu:scan:source:";
+
+export function sourceChoiceKey(id) {
+  return `${SOURCE_STORAGE_PREFIX}${id}`;
+}
+
+export function readSourceChoice(storage, id) {
+  if (!storage || !id) return null;
+  try {
+    const value = storage.getItem(sourceChoiceKey(id));
+    return typeof value === "string" && value ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeSourceChoice(storage, id, source) {
+  if (!storage || !id || !source) return false;
+  try {
+    storage.setItem(sourceChoiceKey(id), source);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveSource(dto, stored) {
+  const ids = sourceOptions(dto).map((option) => option.id);
+  if (stored && ids.includes(stored)) return stored;
+  return preferredSource(dto);
+}
+
+// Two short lines replace a wall of metrics: where the model came from, then
+// what it cannot show. The full table stays one disclosure below.
+export function provenanceSummary(dto) {
+  if (!dto || dto.stage !== "ready") return { source: "", limits: [] };
+  const photos = (dto.photos ?? []).length;
+  const submitted = Number(dto.input?.photos ?? dto.source?.photos ?? photos) || photos;
+  const quality = MODEL_QUALITY[dto.input?.modelQuality] ?? MODEL_QUALITY[0];
+  const photoset = dto.input?.source === "photos" || dto.input?.mode === "photo";
+  const pieces = [];
+  if (dto.mock === true) pieces.push("Mode simulasi lokal, bukan KIRI");
+  else if (photoset) pieces.push(`KIRI Engine Photo Scan ${quality}`);
+  else if (dto.input?.mode === "mesh") pieces.push("KIRI Engine mesh objek");
+  else pieces.push("KIRI Engine 3DGS video");
+  if (submitted) pieces.push(`${submitted} foto dikirim`);
+  if (dto.completedAt) pieces.push(`selesai ${formatDateTime(dto.completedAt)}`);
+  const source = pieces.join(" · ");
+
+  const limits = [];
+  const hole = holeShareOf(dto);
+  if (dto.demo === true && hole) {
+    limits.push(
+      `Kursi jaring tembus pandang: ${hole} siluet model masih berlubang dan tidak ditambal, karena jaringnya memang bolong.`,
+    );
+  } else if (hasPoorCoverage(dto) && hole) {
+    limits.push(
+      `${hole} siluet model masih tembus pandang; bagian berlubang tidak ditambal karena sering memang bolong pada barangnya.`,
+    );
+  }
+  const d = dto.source?.dimensions;
+  if (d)
+    limits.push(
+      `Ukuran ${d.length} × ${d.width} × ${d.height} ${d.unit || "cm"} berasal dari penjual, bukan hasil ukur model.`,
+    );
+  if (photos)
+    limits.push(
+      `${photos} foto asli disimpan di halaman ini; model hanya membantu membaca bentuk.`,
+    );
+  return { source, limits };
+}
+
 // The refinement is a second stage that can be skipped or fail without losing
 // the scan, so its state gets one honest sentence, not a stack trace. When the
 // mesh still sees through itself, the sentence says so instead of implying a
@@ -337,7 +439,8 @@ export function dimensionRows(dimensions) {
   return [
     [
       "Ukuran dari penjual",
-      `${dimensions.length} × ${dimensions.width} × ${dimensions.height} ${unit}`.trim(),
+      `${dimensions.length} × ${dimensions.width} × ${dimensions.height} ${unit}`.trim() +
+        " · bukan hasil ukur model",
     ],
   ];
 }
@@ -370,7 +473,16 @@ export function detailRows(dto) {
     ["Sumber", source],
     [
       photoset ? "Berkas foto" : "Berkas video",
-      [dto.source?.filename, formatBytes(dto.source?.bytes)].filter(Boolean).join(" · "),
+      dto.demo === true
+        ? [
+            `${dto.source?.photos ?? dto.photos?.length ?? 0} foto dari ponsel`,
+            formatBytes(dto.source?.bytes),
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : [dto.source?.filename, formatBytes(dto.source?.bytes)]
+            .filter(Boolean)
+            .join(" · "),
     ],
     ...(dto.source?.transcodedFrom
       ? [

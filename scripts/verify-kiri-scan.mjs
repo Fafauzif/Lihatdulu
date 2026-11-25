@@ -328,7 +328,9 @@ async function layoutFacts(page) {
     assert.equal(await page.locator("[data-scan-open-camera]").isVisible(), true);
     assert.equal(await page.locator("[data-scan-choose]").isVisible(), true);
     assert.equal(
-      await page.locator('[data-scan-upload] a[href="/pindai/demo-chair"]').first().isVisible(),
+      await page
+        .locator('[data-scan-upload] .scan-example-link a[href="/pindai/demo-chair"]')
+        .isVisible(),
       true,
     );
     await shot(page, "01-upload-empty");
@@ -489,9 +491,17 @@ async function layoutFacts(page) {
 
   await check("the prepared Sora walkthrough and its routes still work", async () => {
     await open(page, "/jual");
-    const entry = page.locator(".vj-scan-entry");
-    assert.match(await entry.textContent(), /KIRI Engine/);
-    assert.match(await entry.textContent(), /Pindai dari video/);
+    // Two clearly separate seller routes: the prepared walkthrough and a scan.
+    const paths = page.locator(".vj-paths");
+    await paths.first().waitFor({ timeout: 20_000 });
+    const sora = page.locator(".vj-path-sora");
+    const scan = page.locator(".vj-path-scan");
+    assert.match(await sora.textContent(), /Panduan video Sora/);
+    assert.match(await sora.textContent(), /klip 18 detik/);
+    assert.match(await scan.textContent(), /Pindai furnitur dari video/);
+    assert.match(await scan.textContent(), /KIRI Engine/);
+    assert.equal(await sora.locator('a[href="/jual/sora/rekam"]').isVisible(), true);
+    assert.equal(await scan.locator('a[href="/jual/pindai"]').isVisible(), true);
     assert.equal(await page.locator('a[href="/jual/sora/rekam"]').count() > 0, true);
     await open(page, "/jual/sora/rekam");
     await page.locator(".video-journey").waitFor();
@@ -644,12 +654,17 @@ async function layoutFacts(page) {
       await page.locator("[data-scan-source='refined']").getAttribute("aria-selected"),
       "true",
     );
-    const note = await page.locator("[data-scan-refine-note]").textContent();
-    assert.match(note, /Penyempurnaan lokal/);
+    const summary = page.locator("[data-scan-summary]");
+    await summary.waitFor({ state: "visible" });
+    const summaryText = await summary.textContent();
+    assert.match(summaryText, /KIRI Engine|Mode simulasi/);
+    assert.match(summaryText, /foto/);
+    const details = await page.locator("[data-scan-details]").textContent();
+    assert.match(details, /Penyempurnaan/);
     const caveat = await page.locator("[data-scan-caveat]").textContent();
     assert.match(caveat, /Pratinjau 3D perkiraan/);
     await shot(page, "16-refined-sources");
-    return { labels, note, caveat };
+    return { labels, summary: summaryText.trim(), caveat };
   });
 
   await check("the raw tab keeps KIRI's untouched file", async () => {
@@ -674,26 +689,81 @@ async function layoutFacts(page) {
     const panel = page.locator("[data-scan-photos]");
     await panel.waitFor({ state: "visible" });
     assert.equal(await page.locator("[data-scan-viewer]").isVisible(), false);
+    const hero = page.locator("[data-scan-photo-hero]");
+    await hero.waitFor({ state: "visible" });
+    await page.waitForFunction(
+      () => {
+        const image = document.querySelector("[data-scan-photo-hero]");
+        return image && image.complete && image.naturalWidth > 0;
+      },
+      null,
+      { timeout: 15_000 },
+    );
     const images = page.locator("[data-scan-photo-grid] img");
     const count = await images.count();
     assert.ok(count >= 1, "at least one still is offered");
-    const loaded = await page.evaluate(() =>
-      [...document.querySelectorAll("[data-scan-photo-grid] img")].every(
-        (image) => image.complete && image.naturalWidth > 0,
-      ),
+    // The grid is lazy: bring it into view, then require every still to decode.
+    await page.locator("[data-scan-photo-grid]").scrollIntoViewIfNeeded();
+    await page.waitForFunction(
+      () =>
+        [...document.querySelectorAll("[data-scan-photo-grid] img")].every(
+          (image) => image.complete && image.naturalWidth > 0,
+        ),
+      null,
+      { timeout: 20_000 },
     );
-    assert.ok(loaded, "every still decoded");
+    const shown = await page.evaluate(() => {
+      const tabs = document.querySelector("[data-scan-tabs]");
+      const photos = document.querySelector("[data-scan-photos]");
+      return Boolean(
+        tabs &&
+          photos &&
+          tabs.compareDocumentPosition(photos) & Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+    assert.ok(shown, "the photos sit after the tabs, before anything else");
     await shot(page, "18-refined-photos-tab");
     return { stills: count };
   });
 
-  await check("a reload resumes the same job and keeps the chosen tabs", async () => {
+  await check("an explicit source choice survives a reload", async () => {
     const before = await jobCount();
+    assert.equal(
+      await page.locator("[data-scan-source='photos']").getAttribute("aria-selected"),
+      "true",
+    );
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("[data-scan-source]").first().waitFor({ timeout: 30_000 });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("[data-scan-source='photos']")?.getAttribute("aria-selected") ===
+        "true",
+      null,
+      { timeout: 15_000 },
+    );
     assert.equal(await jobCount(), before);
     assert.equal(await page.locator("[data-scan-source]").count(), 3);
-    return { jobs: before };
+    return { source: "photos", jobs: before };
+  });
+
+  await check("keyboard focus stays on the tablist while the source changes", async () => {
+    await page.locator("[data-scan-source='photos']").focus();
+    await page.keyboard.press("ArrowRight");
+    const focus = await page.evaluate(() => {
+      const active = document.activeElement;
+      return {
+        role: active?.getAttribute("role"),
+        source: active?.dataset?.scanSource,
+        inside: Boolean(active?.closest("[data-scan-tabs]")),
+        selected: active?.getAttribute("aria-selected"),
+      };
+    });
+    assert.equal(focus.role, "tab");
+    assert.ok(focus.inside, "focus stays inside the tablist");
+    assert.notEqual(focus.source, "photos");
+    assert.equal(focus.selected, "true");
+    await shot(page, "18b-tab-focus");
+    return focus;
   });
 
   await check("a failed refinement falls back to the raw scan and can be retried", async () => {
@@ -705,6 +775,12 @@ async function layoutFacts(page) {
     record.refined = null;
     await fs.writeFile(jobFile, JSON.stringify(record, null, 2));
     try {
+      // A saved source choice from the previous check would outrank the
+      // fallback; this check is about the fallback itself.
+      await page.evaluate(() => {
+        for (const key of Object.keys(localStorage))
+          if (key.startsWith("lihatdulu:scan:source:")) localStorage.removeItem(key);
+      });
       await page.reload({ waitUntil: "networkidle" });
       const note = page.locator("[data-scan-refine-note]");
       await note.waitFor({ state: "visible", timeout: 30_000 });
@@ -720,15 +796,16 @@ async function layoutFacts(page) {
       await button.waitFor({ state: "visible" });
       const before = await jobCount();
       await button.click();
-      // The failed note also starts with "Penyempurnaan lokal", so wait for the
-      // applied line ("Penyempurnaan lokal: …") and for the retry button, which
-      // only hides once the stage has applied, to disappear.
+      // Applying the refine folds the metrics into the technical rows and drops
+      // the retry button; the separate applied paragraph is gone by design.
+      await page.locator("[data-scan-refine]").waitFor({ state: "hidden", timeout: 60_000 });
       await page.waitForFunction(
-        () => /Penyempurnaan lokal: /.test(document.querySelector("[data-scan-refine-note]")?.textContent ?? ""),
+        () =>
+          /Penyempurnaan/.test(document.querySelector("[data-scan-details]")?.textContent ?? "") &&
+          document.querySelector("[data-scan-summary]")?.hidden === false,
         null,
-        { timeout: 60_000 },
+        { timeout: 30_000 },
       );
-      await page.locator("[data-scan-refine]").waitFor({ state: "hidden", timeout: 30_000 });
       assert.equal(await jobCount(), before, "a retry must not create a job");
       assert.equal(await page.locator("[data-scan-source]").count(), 3);
       await shot(page, "19-refine-retry");
@@ -788,6 +865,15 @@ async function layoutFacts(page) {
     const review = (await page.locator("[data-rec-status]").innerText()).trim();
     await page.locator("[data-rec-use]").click();
     await page.locator("[data-scan-media]:not([hidden]) video").waitFor();
+    // The clip is probed after it appears; read the facts only once the length
+    // has been recovered, so a slow probe is not mistaken for a missing one.
+    await page
+      .waitForFunction(
+        () => /\d+ dtk/.test(document.querySelector("[data-scan-facts]")?.textContent ?? ""),
+        null,
+        { timeout: 20_000 },
+      )
+      .catch(() => {});
     const facts = (await page.locator("[data-scan-facts]").innerText()).trim();
     assert.match(facts, /\.(?:webm|mp4)/i, `recording name: ${facts}`);
     // Android's streamed WebM reports no duration until the clip is seeked;
@@ -812,6 +898,249 @@ async function layoutFacts(page) {
 
   await context.close();
 }
+
+// 5. The saved real chair. Its job record is a static JSON file, so this page
+// works without the scan API. A fresh visit opens the photos, an explicit tab
+// choice survives a reload, and a GLB never downloads the Spark runtime.
+{
+  const { context, page } = await newPage({ viewport: { width: 390, height: 844 } });
+  const requested = [];
+  page.on("request", (request) => requested.push(request.url()));
+
+  await check("the saved chair opens on photos with the original photo under the tabs", async () => {
+    await open(page, "/pindai/demo-chair");
+    await page.locator("[data-scan-source]").first().waitFor({ timeout: 30_000 });
+    await page.waitForFunction(
+      () => {
+        const image = document.querySelector("[data-scan-photo-hero]");
+        return image && image.complete && image.naturalWidth > 0;
+      },
+      null,
+      { timeout: 20_000 },
+    );
+    const state = await page.evaluate(() => {
+      const tabs = document.querySelector("[data-scan-tabs]");
+      const hero = document.querySelector("[data-scan-photo-hero]");
+      return {
+        selected: document
+          .querySelector("[data-scan-source][aria-selected='true']")
+          ?.getAttribute("data-scan-source"),
+        afterTabs: Boolean(
+          tabs &&
+            hero &&
+            tabs.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+        tabs: document.querySelectorAll("[role='tab']").length,
+        viewerHidden: document.querySelector("[data-scan-viewer]")?.hidden ?? false,
+        summary: document.querySelector("[data-scan-summary]")?.textContent ?? "",
+      };
+    });
+    assert.equal(state.selected, "photos");
+    assert.ok(state.afterTabs, "the hero photo comes directly after the tabs");
+    assert.equal(state.tabs, 3);
+    assert.equal(state.viewerHidden, true);
+    assert.match(state.summary, /KIRI Engine Photo Scan Ultra/);
+    assert.match(state.summary, /18,8%/);
+    assert.match(state.summary, /berasal dari penjual/);
+    await shot(page, "22-demo-chair-photos");
+    return state;
+  });
+
+  await check("the saved chair keeps an explicit model choice after a reload", async () => {
+    await page.locator("[data-scan-source='refined']").click();
+    await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator("[data-scan-source]").first().waitFor({ timeout: 30_000 });
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector("[data-scan-source='refined']")
+          ?.getAttribute("aria-selected") === "true",
+      null,
+      { timeout: 15_000 },
+    );
+    await page.locator("[data-scan-viewer][data-state='ready']").waitFor({ timeout: 60_000 });
+    const splat = requested.filter((url) => /scan-splat/.test(url));
+    assert.deepEqual(splat, [], "a GLB must not download the splat runtime");
+    await shot(page, "23-demo-chair-refined-reload");
+    return { splatRequests: splat.length };
+  });
+
+  await check("keyboard can move between sources without losing focus", async () => {
+    await page.locator("[data-scan-source='refined']").focus();
+    await page.keyboard.press("ArrowRight");
+    const focus = await page.evaluate(() => {
+      const active = document.activeElement;
+      return {
+        role: active?.getAttribute("role"),
+        source: active?.getAttribute("data-scan-source"),
+        inside: Boolean(active?.closest("[data-scan-tabs]")),
+        selected: active?.getAttribute("aria-selected"),
+      };
+    });
+    assert.equal(focus.role, "tab");
+    assert.ok(focus.inside, "focus stays on the tablist");
+    assert.equal(focus.selected, "true");
+    await shot(page, "24-demo-chair-focus");
+    return focus;
+  });
+
+  await check("the saved-chair page raised no page errors", async () => {
+    const demoErrors = report.pageErrors.filter((entry) =>
+      /\/pindai\/demo-chair/.test(entry.url),
+    );
+    assert.deepEqual(demoErrors, []);
+    return { demoErrors: 0 };
+  });
+
+  await context.close();
+}
+
+// 5b. A slow link. The saved chair's model is a large GLB; while it downloads
+// the page must stay usable, keep the limits visible and let the seller return
+// to the photo evidence with one tap.
+{
+  const { context, page } = await newPage({ viewport: { width: 390, height: 844 } });
+  const glb = [];
+  await page.route("**/demo/kursi/**/*.glb", async (route) => {
+    glb.push(route.request().url().replace(base, ""));
+    await new Promise((resolve) => setTimeout(resolve, 3500));
+    await route.continue().catch(() => {});
+  });
+
+  await check("a slow chair model keeps the evidence usable and still opens", async () => {
+    await page.goto(base + "/pindai/demo-chair", { waitUntil: "domcontentloaded" });
+    await page.locator("[data-scan-source][aria-selected='true']").waitFor({ timeout: 20_000 });
+    const first = await page.evaluate(() => ({
+      selected: document
+        .querySelector("[data-scan-source][aria-selected='true']")
+        ?.getAttribute("data-scan-source"),
+      photosVisible: !(document.querySelector("[data-scan-photos]")?.hidden ?? true),
+    }));
+    assert.equal(first.selected, "photos");
+    assert.equal(first.photosVisible, true);
+    assert.deepEqual(glb, [], "the model is downloaded only when it is opened");
+
+    await page.locator("[data-scan-source='refined']").click();
+    const during = await page.evaluate(() => {
+      const tabs = document.querySelector("[data-scan-tabs]");
+      return {
+        state: document.querySelector("[data-scan-viewer]")?.dataset.state ?? null,
+        tabsVisible: Boolean(tabs && tabs.getBoundingClientRect().height > 0),
+        summary: (document.querySelector("[data-scan-summary]")?.textContent ?? "").trim(),
+      };
+    });
+    assert.equal(during.tabsVisible, true, "the source tabs stay on screen while loading");
+    assert.ok(
+      ["idle", "loading"].includes(during.state),
+      "viewer state while the model is slow: " + during.state,
+    );
+    assert.match(during.summary, /18,8%/, "the limit stays readable while the model loads");
+    await shot(page, "25-demo-chair-slow-model");
+
+    // The photo evidence remains one tap away during the wait.
+    assert.equal(await page.locator("[data-scan-source='photos']").isEnabled(), true);
+    await page.locator("[data-scan-source='photos']").click();
+    await page.waitForFunction(
+      () => !(document.querySelector("[data-scan-photos]")?.hidden ?? true),
+      null,
+      { timeout: 10_000 },
+    );
+
+    await page.locator("[data-scan-source='refined']").click();
+    await page
+      .locator("[data-scan-viewer][data-state='ready']")
+      .waitFor({ timeout: 60_000 });
+    assert.ok(glb.length > 0, "the slow model was requested");
+    assert.deepEqual(
+      report.pageErrors.filter((entry) => /\/pindai\/demo-chair/.test(entry.url)),
+      [],
+    );
+    return { during, glb: glb.length };
+  });
+
+  await context.close();
+}
+
+// 5c. A seller who leaves mid-upload. The request is aborted with the page, no
+// job is created server-side, and nothing is left restored or polling.
+{
+  const { context, page } = await newPage({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  let held = 0;
+  await page.route("**/api/kiri/jobs", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    held += 1;
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    await route.continue().catch(() => {});
+  });
+
+  await check("leaving the page mid-upload cancels the send without a stuck job", async () => {
+    const before = await jobCount();
+    await open(page, "/jual/pindai");
+    await pickClip(page);
+    await page.locator("[data-scan-consent]").check();
+    await page.locator("[data-scan-submit]").click();
+    await page.waitForFunction(
+      () => {
+        const job = document.querySelector("[data-scan-job]");
+        return job && !job.hidden;
+      },
+      null,
+      { timeout: 20_000 },
+    );
+    // Walk away while the browser is still holding the request.
+    await page.goto(base + "/pindai/demo-chair", { waitUntil: "domcontentloaded" });
+    await page.locator("[data-scan-tabs]").waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(1500);
+    await open(page, "/jual/pindai");
+    const restored = await page.evaluate(() => ({
+      job: Boolean(document.querySelector("[data-scan-job]:not([hidden])")),
+      chooseDisabled: document.querySelector("[data-scan-input]")?.disabled ?? false,
+    }));
+    assert.equal(restored.job, false, "no job is restored after the cancelled upload");
+    assert.equal(restored.chooseDisabled, false);
+    assert.deepEqual(
+      report.pageErrors.filter((entry) => /\/jual\/pindai/.test(entry.url)),
+      [],
+    );
+    await shot(page, "26-upload-cancelled");
+    const after = await jobCount();
+    assert.equal(after, before, "the cancelled upload creates no job");
+    return { before, after, held };
+  });
+
+  await context.close();
+}
+
+// 6. A static host has no scan API: say so once and lead with the saved chair.
+{
+  const { context, page } = await newPage({ viewport: { width: 390, height: 844 } });
+  await page.route("**/api/kiri/config", (route) => route.abort());
+
+  await check("without an API the upload page says so and links the saved chair", async () => {
+    await open(page, "/jual/pindai");
+    const panel = page.locator("[data-scan-static]");
+    await panel.waitFor({ state: "visible", timeout: 20_000 });
+    const text = await panel.textContent();
+    assert.match(text, /Demo statis/);
+    assert.match(text, /belum aktif/);
+    assert.equal(await page.locator("[data-scan-submit]").isDisabled(), true);
+    assert.equal(await page.locator("[data-scan-open-camera]").isDisabled(), true);
+    assert.equal(
+      await page.locator("[data-scan-static] a[href='/pindai/demo-chair']").isVisible(),
+      true,
+    );
+    await shot(page, "27-static-upload");
+    return { text: text.trim() };
+  });
+
+  await context.close();
+}
+
 await stopServer();
 report.finished = new Date().toISOString();
 report.serverLogTail = serverLog.slice(-4000);

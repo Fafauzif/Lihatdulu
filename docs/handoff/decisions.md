@@ -23,6 +23,7 @@
 | Paid input | Real, dense, continuous capture only: a credit is charged on submission, so synthetic renders and sparse photo sets are refused locally (minimum 20 stills) and never sent. A balance probe (`GET /api/kiri/balance`) and a pre-submit guard exist so no run spends blind. | KIRI starts refunding failures or accepting synthetic input. |
 | Generalisation | The pipeline is item-agnostic by construction (no per-product template, no hand-built mesh) and has been proven on one product; a second product needs a new clip, which the repository does not contain. | The owner supplies footage of a different product; one credit proves or disproves it. |
 | Scan truth | The preview is `/pindai/:id`, with provider, serial (truncated), splat count and timings. Scans do not become catalogue listings. | The owner wants scans listed in the catalogue. |
+| Judging surface | The judged build is the existing static Vercel project: catalogue, Sora, the prepared walkthrough, and the saved real chair scan, with `/jual/pindai` stating that live scanning is not active on that host. Live capture stays a separate decision (authorized host with persistent disk and HTTPS, paid KIRI credits). | An authorized HTTPS scan host exists, or the judge needs live capture on the day. |
 
 ## Still open
 
