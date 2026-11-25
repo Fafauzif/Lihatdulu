@@ -63,3 +63,17 @@ test("a real 404 keeps its not_found code", async () => {
     });
   });
 });
+
+test("the deployed host answers /api with a plain 404, which is also unavailable", async () => {
+  const response = new Response("Not Found", {
+    status: 404,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+  await withFetch(response, async () => {
+    await assert.rejects(getJob("8f1c3b9e-0000-4000-8000-00000000dead"), (error) => {
+      assert.equal(error.code, "unavailable");
+      assert.equal(error.status, 404);
+      return true;
+    });
+  });
+});

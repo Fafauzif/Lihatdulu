@@ -161,10 +161,11 @@ the catalogue).
 | Build | `npm run build` | green (pre-existing >500 kB warning) |
 
 A stale or unknown `/pindai/:id` link on the static host used to poll five times
-behind a spinner, because `/api/...` is rewritten to the app shell. The result
-page now recognises a non-JSON answer as **"Alamat ini hanya menyajikan contoh
-tersimpan, tanpa server pindai"**, shows it in 320 ms and offers **Contoh kursi
-asli** beside the retake and catalogue links.
+behind a spinner: Vercel answers `/api/...` with its own plain `404` page and the
+client read that as an internal failure. The result page now treats any non-JSON
+API answer as **"Alamat ini hanya menyajikan contoh tersimpan, tanpa server
+pindai"**, shows it in **278 ms** and offers **Contoh kursi asli** beside the
+retake and catalogue links.
 
 New coverage for what the old suite missed: the saved chair opens on photos with
 the original photo directly under the tabs, an explicit model choice survives a

@@ -1143,10 +1143,12 @@ async function layoutFacts(page) {
   // not as five polling attempts behind a spinner.
   await check("an unknown job link on a static host says so and links the chair", async () => {
     await page.route("**/api/kiri/jobs/*", (route) =>
+      // Vercel answers /api/... with its own plain 404 page; a host behind a
+      // catch-all rewrite answers with the shell. Both mean "no scanner here".
       route.fulfill({
-        status: 200,
-        contentType: "text/html; charset=utf-8",
-        body: "<!doctype html><title>LihatDulu</title>",
+        status: 404,
+        contentType: "text/plain; charset=utf-8",
+        body: "Not Found",
       }),
     );
     const started = Date.now();
