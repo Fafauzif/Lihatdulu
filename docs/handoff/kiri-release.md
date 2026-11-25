@@ -155,10 +155,16 @@ the catalogue).
 
 | Check | Command | Result |
 |---|---|---|
-| Unit suite | `npm run test:unit` | **335 tests, 334 pass, 1 skipped, 0 fail** |
+| Unit suite | `npm run test:unit` | **339 tests, 338 pass, 1 skipped, 0 fail** |
 | Marketplace acceptance | `npm run test:browser` | **26 passed, 0 failed** |
-| Scan acceptance (mocks) | `npm run test:kiri:browser` | **41/41 checks** |
+| Scan acceptance (mocks) | `npm run test:kiri:browser` | **42/42 checks** |
 | Build | `npm run build` | green (pre-existing >500 kB warning) |
+
+A stale or unknown `/pindai/:id` link on the static host used to poll five times
+behind a spinner, because `/api/...` is rewritten to the app shell. The result
+page now recognises a non-JSON answer as **"Alamat ini hanya menyajikan contoh
+tersimpan, tanpa server pindai"**, shows it in 320 ms and offers **Contoh kursi
+asli** beside the retake and catalogue links.
 
 New coverage for what the old suite missed: the saved chair opens on photos with
 the original photo directly under the tabs, an explicit model choice survives a
