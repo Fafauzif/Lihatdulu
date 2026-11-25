@@ -276,11 +276,14 @@ async function parseError(response) {
   } catch {
     body = null;
   }
-  // A static host answers /api/... with its own 404 page, never with our error
-  // JSON. That is "no scan server here", not an internal failure.
-  if (!body)
-    return new ScanApiError("unavailable", ERROR_COPY.unavailable, response.status);
   const error = body?.error;
+  const code = error?.code;
+  // A static host answers /api/... itself: Vercel returns a plain 404 page, or
+  // JSON with a numeric code like {"error":{"code":"404"}}. Neither is our API.
+  // Our own codes are words (not_found, internal, ...), so anything else means
+  // "no scan server here" — a state that resolves at once, not after retries.
+  if (!body || typeof error !== "object" || code === undefined || /^\d+$/.test(String(code)))
+    return new ScanApiError("unavailable", ERROR_COPY.unavailable, response.status);
   return new ScanApiError(
     error?.code ?? "internal",
     error?.message,
