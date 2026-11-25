@@ -225,6 +225,7 @@ export function renderScanPreview() {
           <p class="scan-error" data-scan-error-text></p>
           <div class="scan-retry">
             <button type="button" class="scan-link-button" data-scan-retry hidden>${PREVIEW_COPY.retry}</button>
+            <a class="scan-link-button" href="/pindai/demo-chair" data-nav>Contoh kursi asli</a>
           </div>
         </section>
         <div class="scan-preview-actions">
