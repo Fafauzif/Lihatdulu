@@ -276,6 +276,10 @@ async function parseError(response) {
   } catch {
     body = null;
   }
+  // A static host answers /api/... with its own 404 page, never with our error
+  // JSON. That is "no scan server here", not an internal failure.
+  if (!body)
+    return new ScanApiError("unavailable", ERROR_COPY.unavailable, response.status);
   const error = body?.error;
   return new ScanApiError(
     error?.code ?? "internal",
